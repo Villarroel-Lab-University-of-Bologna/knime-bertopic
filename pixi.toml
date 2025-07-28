@@ -1,0 +1,25 @@
+[workspace]
+channels = ["knime", "conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[tasks]
+
+[dependencies]
+python = "3.11.*"
+knime-extension = "*"
+knime-python-base = "*"
+pixi-pycharm = ">=0.0.8,<0.0.9"
+bertopic = ">=0.17.3,<0.18"
+debugpy = ">=1.8.14,<2"
+
+[feature.build.dependencies]
+python = "3.9.*"
+knime-extension-bundling = "5.5.*"
+bertopic = ">=0.17.3,<0.18"
+
+[feature.build.tasks]
+build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "python ./.pixi/envs/build/bin/build_python_extension.py . {{ dest }}"}
+
+[environments]
+build = {features = ["build"], no-default-feature = true}
+
