@@ -16,7 +16,7 @@ main_category = knext.category(
     name="Topic Extractor (BERTopic)", 
     node_type=knext.NodeType.LEARNER, 
     icon_path="../icons/icon.png", 
-    category="main_category",
+    category=main_category,
     description="Extract topics from documents using BERTopic.")
 
 @knext.input_table(name="Document table", description="Data table with the document collection to analyze. Each row contains one document.")
