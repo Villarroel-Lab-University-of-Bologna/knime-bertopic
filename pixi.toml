@@ -22,4 +22,3 @@ build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = 
 
 [environments]
 build = {features = ["build"], no-default-feature = true}
-
