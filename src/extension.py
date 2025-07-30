@@ -9,7 +9,7 @@ main_category = knext.category(
     level_id="bertopic",
     name="Topic Modeling",
     description="Extract topics from documents using BERTopic.",
-    icon="icons/icon.png",
+    icon="../icons/icon.png",
 )
 
 @knext.node(
