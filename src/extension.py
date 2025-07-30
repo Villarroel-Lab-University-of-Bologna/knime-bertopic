@@ -4,7 +4,12 @@ from bertopic import BERTopic
 import pandas as pd
 LOGGER = logging.getLogger(__name__)
 
-@knext.node(name="Topic Extractor (BERTopic)", node_type=knext.NodeType.LEARNER, icon_path="../icons/icon.png", category="/")
+@knext.node(
+    name="Topic Extractor (BERTopic)", 
+    node_type=knext.NodeType.LEARNER, 
+    icon_path="../icons/icon.png", 
+    category="/")
+
 @knext.input_table(name="Document table", description="Data table with the document collection to analyze. Each row contains one document.")
 @knext.output_table(name="Document table with topics", description="The document collection with topic assignments and the probability for each document to belong to a certain topic.")
 @knext.output_table(name="Topic terms", description="The topic models with the terms and their weight per topic.")
