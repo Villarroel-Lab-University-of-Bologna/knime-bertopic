@@ -8,7 +8,7 @@ LOGGER = logging.getLogger(__name__)
 @knext.node(
     name="Topic Extractor (BERTopic)", 
     node_type=knext.NodeType.LEARNER, 
-    icon_path="../icons/icon.png", 
+    icon_path="icons/icon.png", 
     category="/",
     description="Extract topics from documents using BERTopic.")
 @knext.input_table(name="Document table", description="Data table with the document collection to analyze. Each row contains one document.")
