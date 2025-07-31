@@ -2,6 +2,7 @@ import logging
 import knime.extension as knext
 from bertopic import BERTopic
 import pandas as pd
+from utils import knutils as kutil
 LOGGER = logging.getLogger(__name__)
 
 @knext.node(
@@ -18,17 +19,6 @@ class TemplateNode:
     TODO Long description of the node.
     """
 
-    # TODO Move to utils
-    def is_numeric(column):  # Filter columns visible in the column_param for numeric ones
-        return (
-            column.ktype == knext.double()
-            or column.ktype == knext.int32()
-            or column.ktype == knext.int64()
-        )
-    
-    def is_string(column):
-        return column.ktype == knext.string()
-
     # Language in input documents
     language_param = knext.StringParameter(label="Input language", description="", default_value="english")
 
@@ -36,7 +26,7 @@ class TemplateNode:
     probabilities_param = knext.BoolParameter(label="Calculate Probabilities", description="Output probabilities", default_value=False)
     
     # Document column
-    document_column_param = knext.ColumnParameter(label="Document column", description="Documents from which topics should be extracted", port_index=0, column_filter=is_string)
+    document_column_param = knext.ColumnParameter(label="Document column", description="Documents from which topics should be extracted", port_index=0, column_filter=kutil.is_string)
 
     # TODO Embedding model to use for topic extraction
     embedding_model_param = knext.StringParameter(label="Embedding Model", description="The options to choose from.", default_value="SentenceTransformers", enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"], is_advanced=True)
