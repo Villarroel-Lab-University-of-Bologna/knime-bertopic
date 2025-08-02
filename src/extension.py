@@ -50,9 +50,9 @@ class BERTopicLearner:
     )
 
     nr_topics = knext.IntParameter(
-        "Number of Topics",
-        "Set to -1 to let BERTopic decide, or a fixed number to reduce topics.",
-        default_value=-1
+        label="Number of Topics",
+        description="Set to -1 to let BERTopic decide, or a fixed number to reduce topics.",
+        default_value=2
     )
 
     def configure(self, config_context, input_schema):
