@@ -1,12 +1,7 @@
 import logging
 import knime.extension as knext
 from bertopic import BERTopic
-from sentence_transformers import SentenceTransformer
-from flair.embeddings import TransformerDocumentEmbeddings
-import gensim.downloader as api
 import pandas as pd
-import hdbscan
-from sklearn.cluster import KMeans
 from utils import knutils as kutil
 LOGGER = logging.getLogger(__name__)
 

@@ -3,13 +3,6 @@ import logging
 import pickle
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
-import hdbscan
-from sklearn.cluster import KMeans
-from sentence_transformers import SentenceTransformer
-from flair.embeddings import TransformerDocumentEmbeddings
-import gensim.downloader as api
-import spacy # type: ignore
-
 
 LOGGER = logging.getLogger(__name__)
 
