@@ -12,7 +12,7 @@ from utils import knutils as kutil
 @knext.node(
     name="BERTopic Learner",
     node_type=knext.NodeType.LEARNER,
-    icon_path="icons/bertopic_learner.png",
+    icon_path="icons/icon.png",
     category="/"
 )
 @knext.input_table("Input Table", "Table containing the text column for topic modeling.")
