@@ -13,7 +13,7 @@ from utils import knutils as kutil
     name="BERTopic Learner",
     node_type=knext.NodeType.LEARNER,
     icon_path="icons/bertopic_learner.png",
-    category="/Text/BERT"
+    category="/"
 )
 @knext.input_table("Input Table", "Table containing the text column for topic modeling.")
 @knext.output_table("Document-Topic Probabilities", "Document-topic distribution with probabilities.")
