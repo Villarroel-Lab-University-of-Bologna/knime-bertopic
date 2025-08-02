@@ -81,6 +81,8 @@ class BERTopicLearner:
 
         # Output 1: Document-Topic Probabilities with "Topics" column
         df["Topics"] = topics
+        df["Probabilities"] = probs.tolist()
+        df = df[[self.text_column, "Topics", "Probabilities"]]
         doc_topic_df = df
 
         # Output 2: Word-Topic Probabilities
