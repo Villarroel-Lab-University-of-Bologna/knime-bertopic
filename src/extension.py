@@ -8,34 +8,38 @@ import pandas as pd
 import hdbscan
 from sklearn.cluster import KMeans
 from utils import knutils as kutil
+LOGGER = logging.getLogger(__name__)
+
 
 @knext.node(
     name="BERTopic Learner",
     node_type=knext.NodeType.LEARNER,
     icon_path="icons/icon.png",
-    category="/"
-)
-@knext.input_table("Input Table", "Table containing the text column for topic modeling.")
-@knext.output_table("Document-Topic Probabilities", "Document-topic distribution with probabilities.")
-@knext.output_table("Word-Topic Probabilities", "Topic-word probabilities for each topic.")
-@knext.output_table("Model Fit Summary", "Basic statistics and evaluation metrics from model fitting.")
+    category="/")
+
+@knext.input_table(name = "Input Table", description = "Table containing the text column for topic modeling.")
+@knext.output_table(name = "Document-Topic Probabilities", description="Document-topic distribution with probabilities.")
+@knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic.")
+@knext.output_table(name="Model Fit Summary", description="Basic statistics and evaluation metrics from model fitting.")
+
+
 class BERTopicLearner:
     """Train a BERTopic model using a selected embedding backend."""
 
-    text_column = knext.ColumnParameter(
-        "Text Column",
-        "Column containing input documents.",
-        column_filter=lambda col: col.type == knext.string,
-        include_none_column=False
-    )
+    document_column_param = knext.ColumnParameter(
+        label="Document column", 
+        description="Documents from which topics should be extracted", 
+        port_index=0, 
+        column_filter=kutil.is_string)
+
 
     embedding_model_param = knext.StringParameter(
-        label="Embedding Model",
-        description="Type of embedding model to use for BERTopic.",
-        default_value="SentenceTransformers",
-        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"],
-        is_advanced=True
-    )
+        label="Embedding Model", 
+        description="The options to choose from.", 
+        default_value="SentenceTransformers", 
+        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"], 
+        is_advanced=True)
+
 
     clustering_method = knext.StringParameter(
         label="Clustering Method",
