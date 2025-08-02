@@ -3,6 +3,12 @@ import logging
 import pickle
 from sklearn.preprocessing import LabelEncoder
 import pandas as pd
+import hdbscan
+from sklearn.cluster import KMeans
+from sentence_transformers import SentenceTransformer
+from flair.embeddings import TransformerDocumentEmbeddings
+import gensim.downloader as api
+import spacy # type: ignore
 
 
 LOGGER = logging.getLogger(__name__)
@@ -161,3 +167,23 @@ def check_canceled(exec_context: knext.ExecutionContext) -> None:
     """
     if exec_context.is_canceled():
         raise RuntimeError("Execution canceled")
+    
+def get_embedding_model(model_type: str):
+    if model_type == "SentenceTransformers":
+        return SentenceTransformer("all-MiniLM-L6-v2")
+    elif model_type == "Flair":
+        return TransformerDocumentEmbeddings('bert-base-uncased')
+    elif model_type == "Spacy":
+        return spacy.load("en_core_web_md")
+    elif model_type == "Gensim":
+        return api.load("glove-wiki-gigaword-50")
+    else:
+        raise ValueError(f"Unsupported embedding model type: {model_type}")
+
+def get_clustering_model(method: str, nr_topics: int):
+    if method == "HDBSCAN":
+        return hdbscan.HDBSCAN()
+    elif method == "KMeans":
+        return KMeans(n_clusters=nr_topics if nr_topics > 0 else 10)
+    else:
+        raise ValueError(f"Unsupported clustering method: {method}")
