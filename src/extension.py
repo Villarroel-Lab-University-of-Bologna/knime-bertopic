@@ -11,26 +11,44 @@ LOGGER = logging.getLogger(__name__)
     node_type=knext.NodeType.LEARNER, 
     icon_path="icons/icon.png", 
     category="/")
-@knext.input_table(name="Document table", description="Data table with the document collection to analyze. Each row contains one document.")
-@knext.output_table(name="Document table with topics", description="The document collection with topic assignments and the probability for each document to belong to a certain topic.")
-@knext.output_table(name="Topic terms", description="The topic models with the terms and their weight per topic.")
+@knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
+@knext.output_table(name="Document-Topic Probabilities",description="Document-topic distribution with probabilities.")
+@knext.output_table(name="Word-Topic Probabilities",description="Topic-word probabilities for each topic.")
+@knext.output_table(name="Model Fit Summary",description="Basic statistics and evaluation metrics from model fitting.")
 class TemplateNode:
     """Use BERTopic to extract topics from documents. 
     TODO Long description of the node.
     """
+    text_column = knext.ColumnParameter(
+        "Text Column",
+        "Column containing input documents.",
+        port_index=0, 
+        column_filter=kutil.is_string
+    )
 
-    # Language in input documents
-    language_param = knext.StringParameter(label="Input language", description="", default_value="english")
+    embedding_model_param = knext.StringParameter(
+        label="Embedding Model",
+        description="Type of embedding model to use for BERTopic.",
+        default_value="SentenceTransformers",
+        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"],
+        is_advanced=True
+    )
 
-    # Calculate Probabilities
-    probabilities_param = knext.BoolParameter(label="Calculate Probabilities", description="Output probabilities", default_value=False)
+    clustering_method = knext.StringParameter(
+        label="Clustering Method",
+        description="Clustering algorithm to use within BERTopic.",
+        default_value="HDBSCAN",
+        enum=["HDBSCAN", "KMeans"],
+        is_advanced=True
+    )
+
+    language_param = knext.StringParameter(
+        label="Input language", 
+        description="", 
+        default_value="english"
+    )
+
     
-    # Document column
-    document_column_param = knext.ColumnParameter(label="Document column", description="Documents from which topics should be extracted", port_index=0, column_filter=kutil.is_string)
-
-    # TODO Embedding model to use for topic extraction
-    embedding_model_param = knext.StringParameter(label="Embedding Model", description="The options to choose from.", default_value="SentenceTransformers", enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"], is_advanced=True)
-
     # def configure(self, configure_context, input_schema_1):
     def configure(self, configure_context, input_schema_1):  ### Tutorial step 11: Uncomment to configure the new port (and comment out the previous configure header)
         schema1 = input_schema_1.append(knext.Column(knext.int64(), "Topics"))
