@@ -42,6 +42,10 @@ class TemplateNode:
         is_advanced=True
     )
 
+
+
+
+
     def configure(self, config_context, input_schema):
         schema1 = input_schema.append(knext.Column(knext.int64(), "Topics"))
         schema2 = knext.Schema([
@@ -56,7 +60,7 @@ class TemplateNode:
         ], ["Num Topics", "Num Documents", "Custom Topic Reduction"])
         return schema1, schema2, schema3
 
-    def execute(self, exec_context, input_1):  ### Tutorial step 11: Uncomment to accept the new port (and comment out the previous execute header)
+    def execute(self, exec_context, input_1):
         input_1_pandas = input_1.to_pandas()
         
         # Compute the topics and output as new column
