@@ -42,13 +42,20 @@ class TemplateNode:
         is_advanced=True
     )
 
-    
-    def configure(self, configure_context, input_schema_1):  ### Tutorial step 11: Uncomment to configure the new port (and comment out the previous configure header)
-        schema1 = input_schema_1.append(knext.Column(knext.int64(), "Topics"))
-        # return schema1
-        schema2 = knext.Schema([knext.int64(), knext.list_(inner_type=knext.string()), knext.list_(inner_type=knext.double())], ["Topic ID", "Term", "Weight"])
-        return schema1, schema2
- 
+    def configure(self, config_context, input_schema):
+        schema1 = input_schema.append(knext.Column(knext.int64(), "Topics"))
+        schema2 = knext.Schema([
+            knext.int64(),
+            knext.list_(inner_type=knext.string()),
+            knext.list_(inner_type=knext.double())
+        ], ["Topic ID", "Term", "Weight"])
+        schema3 = knext.Schema([
+            knext.int64(),  # Num Topics
+            knext.int64(),  # Num Documents
+            knext.int64()   # Custom Topic Reduction
+        ], ["Num Topics", "Num Documents", "Custom Topic Reduction"])
+        return schema1, schema2, schema3
+
     def execute(self, exec_context, input_1):  ### Tutorial step 11: Uncomment to accept the new port (and comment out the previous execute header)
         input_1_pandas = input_1.to_pandas()
         
