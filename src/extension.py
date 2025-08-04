@@ -61,6 +61,13 @@ class TemplateNode:
         ], ["Num Topics", "Num Documents", "Custom Topic Reduction"])
         return schema1, schema2, schema3
     
+
+
+
+
+
+
+    
     def execute(self, exec_context, input_1):
         input_1_pandas = input_1.to_pandas()
         
@@ -72,62 +79,3 @@ class TemplateNode:
         # Compute the topics and get the most frequent words
         # TODO I am very positive that this can be sped up and/or simplified
         all_topics = topic_model.get_topics()
-'''
-    def execute(self, exec_context, input_table):
-            df = input_table.to_pandas()
-            docs = df[self.text_column]
-
-            # Load selected embedding backend
-            embedder = self._get_embedding_model(self.embedding_model_param)
-
-            # Choose clustering algorithm
-            cluster_model = self._get_clustering_model(self.clustering_method, self.nr_topics)
-
-            # Fit BERTopic
-            model = BERTopic(embedding_model=embedder, cluster_model=cluster_model, nr_topics=self.nr_topics)
-            topics, probs = model.fit_transform(docs.tolist())
-
-            # Output 1: Document-Topic Probabilities with "Topics" column
-            df["Topics"] = topics
-            doc_topic_df = df
-
-            # Output 2: Word-Topic Probabilities
-            all_topics = model.get_topics()
-            all_topics_df = pd.DataFrame(
-                [(key, [w for w, _ in val], [p for _, p in val]) for key, val in all_topics.items()],
-                columns=['Topic ID', 'Term', 'Weight']
-            )
-
-            # Output 3: Model Fit Summary
-            model_fit_df = pd.DataFrame({
-                "Num Topics": [len(model.get_topics())],
-                "Num Documents": [len(df)],
-                "Custom Topic Reduction": [self.nr_topics]
-            })
-
-            return (
-                knext.Table.from_pandas(doc_topic_df),
-                knext.Table.from_pandas(all_topics_df),
-                knext.Table.from_pandas(model_fit_df)
-            )
-
-def _get_embedding_model(self, model_type: str):
-    if model_type == "SentenceTransformers":
-        return SentenceTransformer("all-MiniLM-L6-v2")
-    elif model_type == "Flair":
-        return TransformerDocumentEmbeddings('bert-base-uncased')
-    elif model_type == "Spacy":
-        return spacy.load("en_core_web_md")
-    elif model_type == "Gensim":
-        return api.load("glove-wiki-gigaword-50")
-    else:
-        raise ValueError(f"Unsupported embedding model type: {model_type}")
-
-def _get_clustering_model(self, method: str, nr_topics: int):
-    if method == "HDBSCAN":
-        return hdbscan.HDBSCAN()
-    elif method == "KMeans":
-        return KMeans(n_clusters=nr_topics if nr_topics > 0 else 10)
-    else:
-        raise ValueError(f"Unsupported clustering method: {method}")
-'''
