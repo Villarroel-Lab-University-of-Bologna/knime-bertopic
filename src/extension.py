@@ -4,7 +4,7 @@ from bertopic import BERTopic
 import pandas as pd
 from utils import knutils as kutil
 #from sentence_transformers import SentenceTransformer
-from flair.embeddings import TransformerDocumentEmbeddings
+#from flair.embeddings import TransformerDocumentEmbeddings
 import gensim.downloader as api
 import hdbscan
 from sklearn.cluster import KMeans
