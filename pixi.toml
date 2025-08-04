@@ -11,10 +11,10 @@ knime-python-base = "*"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = ">=0.17.3,<0.18"
 debugpy = ">=1.8.14,<2"
-pip = [
-  "flair",
-  "torch"
-]
+pip = ">=25.2,<26"
+
+[tool.pixi.pip]
+packages = ["flair", "torch"]
 
 [feature.build.dependencies]
 python = "3.9.*"
