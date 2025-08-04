@@ -11,8 +11,6 @@ knime-python-base = "*"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = ">=0.17.3,<0.18"
 debugpy = ">=1.8.14,<2"
-pip = ">=25.2,<26"
-
 pip = [
   "flair",
   "torch"
