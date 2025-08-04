@@ -12,6 +12,9 @@ pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = ">=0.17.3,<0.18"
 debugpy = ">=1.8.14,<2"
 pip = ">=25.2,<26"
+sentence-transformers = "*"
+scikit-learn = "*"
+hdbscan = "*"
 
 [tool.pixi.pip]
 packages = ["flair", "torch"]
@@ -20,6 +23,9 @@ packages = ["flair", "torch"]
 python = "3.9.*"
 knime-extension-bundling = "5.5.*"
 bertopic = ">=0.17.3,<0.18"
+sentence-transformers = "*"
+scikit-learn = "*"
+hdbscan = "*"
 
 [feature.build.tasks]
 build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "python ./.pixi/envs/build/bin/build_python_extension.py . {{ dest }}"}

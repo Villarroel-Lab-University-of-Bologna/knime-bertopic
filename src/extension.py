@@ -3,11 +3,37 @@ import knime.extension as knext
 from bertopic import BERTopic
 import pandas as pd
 from utils import knutils as kutil
-from sentence_transformers import SentenceTransformer
-from flair.embeddings import TransformerDocumentEmbeddings
-import gensim.downloader as api
-import hdbscan
-from sklearn.cluster import KMeans
+
+# Import optional dependencies with error handling
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+try:
+    from flair.embeddings import TransformerDocumentEmbeddings
+    FLAIR_AVAILABLE = True
+except ImportError:
+    FLAIR_AVAILABLE = False
+
+try:
+    import gensim.downloader as api
+    GENSIM_AVAILABLE = True
+except ImportError:
+    GENSIM_AVAILABLE = False
+
+try:
+    import hdbscan
+    HDBSCAN_AVAILABLE = True
+except ImportError:
+    HDBSCAN_AVAILABLE = False
+
+try:
+    from sklearn.cluster import KMeans
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 LOGGER = logging.getLogger(__name__)
 
@@ -39,16 +65,16 @@ class TemplateNode:
     embedding_model_param = knext.StringParameter(
         label="Embedding Model",
         description="Type of embedding model to use for BERTopic.",
-        default_value="SentenceTransformers",
-        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"],
+        default_value="Default",
+        enum=["Default", "SentenceTransformers", "Flair"],
         is_advanced=True
     )
 
     clustering_method = knext.StringParameter(
         label="Clustering Method",
         description="Clustering algorithm to use within BERTopic.",
-        default_value="HDBSCAN",
-        enum=["HDBSCAN", "KMeans"],
+        default_value="Default",
+        enum=["Default", "HDBSCAN", "KMeans"],
         is_advanced=True
     )
     
@@ -111,28 +137,42 @@ class TemplateNode:
         # Set up embedding model
         embedding_model = None
         if self.embedding_model_param == "SentenceTransformers":
+            if not SENTENCE_TRANSFORMERS_AVAILABLE:
+                raise ValueError("SentenceTransformers is not available. Please install it with: pip install sentence-transformers")
             embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         elif self.embedding_model_param == "Flair":
+            if not FLAIR_AVAILABLE:
+                raise ValueError("Flair is not available. Please install it with: pip install flair")
             embedding_model = TransformerDocumentEmbeddings('bert-base-uncased')
-        # Add other embedding models as needed
+        # Use BERTopic's default embedding model if "Default" is selected
         
         # Set up clustering model
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
+            if not HDBSCAN_AVAILABLE:
+                raise ValueError("HDBSCAN is not available. Please install it with: pip install hdbscan")
             cluster_model = hdbscan.HDBSCAN(min_cluster_size=15, metric='euclidean', 
                                           cluster_selection_method='eom', prediction_data=True)
         elif self.clustering_method == "KMeans":
+            if not SKLEARN_AVAILABLE:
+                raise ValueError("scikit-learn is not available. Please install it with: pip install scikit-learn")
             cluster_model = KMeans(n_clusters=self.nr_topics_param, random_state=42)
+        # Use BERTopic's default clustering if "Default" is selected
         
         # Create and fit BERTopic model
-        topic_model = BERTopic(
-            language=self.language_param,
-            calculate_probabilities=self.probabilities_param,
-            nr_topics=self.nr_topics_param,
-            embedding_model=embedding_model,
-            hdbscan_model=cluster_model if self.clustering_method == "HDBSCAN" else None,
-            # Note: KMeans integration might need custom setup depending on BERTopic version
-        )
+        topic_model_params = {
+            'language': self.language_param,
+            'calculate_probabilities': self.probabilities_param,
+            'nr_topics': self.nr_topics_param
+        }
+        
+        # Only add optional parameters if they are not None
+        if embedding_model is not None:
+            topic_model_params['embedding_model'] = embedding_model
+        if cluster_model is not None and self.clustering_method == "HDBSCAN":
+            topic_model_params['hdbscan_model'] = cluster_model
+            
+        topic_model = BERTopic(**topic_model_params)
         
         # Fit the model and get topics
         topics, probs = topic_model.fit_transform(documents)
