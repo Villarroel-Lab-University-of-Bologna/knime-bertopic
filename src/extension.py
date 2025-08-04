@@ -1,213 +1,37 @@
 import logging
 import knime.extension as knext
-from bertopic import BERTopic
 import pandas as pd
-from utils import knutils as kutil
-
-# Import optional dependencies with error handling
-try:
-    from sentence_transformers import SentenceTransformer
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-
-try:
-    from flair.embeddings import TransformerDocumentEmbeddings
-    FLAIR_AVAILABLE = True
-except ImportError:
-    FLAIR_AVAILABLE = False
-
-try:
-    import gensim.downloader as api
-    GENSIM_AVAILABLE = True
-except ImportError:
-    GENSIM_AVAILABLE = False
-
-try:
-    import hdbscan
-    HDBSCAN_AVAILABLE = True
-except ImportError:
-    HDBSCAN_AVAILABLE = False
-
-try:
-    from sklearn.cluster import KMeans
-    SKLEARN_AVAILABLE = True
-except ImportError:
-    SKLEARN_AVAILABLE = False
 
 LOGGER = logging.getLogger(__name__)
 
 
 @knext.node(
-    name="Topic Extractor (BERTopic)", 
-    node_type=knext.NodeType.LEARNER, 
+    name="Simple Text Processor", 
+    node_type=knext.NodeType.MANIPULATOR, 
     icon_path="icons/icon.png", 
     category="/")
-@knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
-@knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities.")
-@knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic.")
-@knext.output_table(name="Model Fit Summary", description="Basic statistics and evaluation metrics from model fitting.")
-class TemplateNode:
-    """Use BERTopic to extract topics from documents. 
-    
-    This node uses the BERTopic library to perform topic modeling on text documents.
-    It supports different embedding models and clustering algorithms to extract
-    meaningful topics from your text data.
-    """
+@knext.input_table(name="Input Table", description="Table containing text data.")
+@knext.output_table(name="Output Table", description="Table with processed text.")
+class SimpleTextNode:
+    """A simple text processing node for testing."""
     
     text_column = knext.ColumnParameter(
         "Text Column",
-        "Column containing input documents.",
-        port_index=0, 
-        column_filter=kutil.is_string
-    )
-
-    embedding_model_param = knext.StringParameter(
-        label="Embedding Model",
-        description="Type of embedding model to use for BERTopic.",
-        default_value="Default",
-        enum=["Default", "SentenceTransformers", "Flair"],
-        is_advanced=True
-    )
-
-    clustering_method = knext.StringParameter(
-        label="Clustering Method",
-        description="Clustering algorithm to use within BERTopic.",
-        default_value="Default",
-        enum=["Default", "HDBSCAN", "KMeans"],
-        is_advanced=True
-    )
-    
-    language_param = knext.StringParameter(
-        label="Language",
-        description="Language for topic modeling.",
-        default_value="english",
-        enum=["english", "multilingual"],
-        is_advanced=True
-    )
-    
-    probabilities_param = knext.BoolParameter(
-        label="Calculate Probabilities",
-        description="Whether to calculate topic probabilities for documents.",
-        default_value=True,
-        is_advanced=True
-    )
-    
-    nr_topics_param = knext.IntParameter(
-        label="Number of Topics",
-        description="Number of topics to extract. Use 'auto' for automatic selection.",
-        default_value=20,
-        is_advanced=True
+        "Select the column containing text data.",
+        port_index=0,
+        column_filter=lambda col: col.ktype == knext.string()
     )
 
     def configure(self, config_context, input_schema):
-        # Output schema 1: Input table with added Topics column
-        schema1 = input_schema.append(knext.Column(knext.int64(), "Topics"))
-        
-        # Output schema 2: Topic-word probabilities
-        schema2 = knext.Schema([
-            knext.Column(knext.int64(), "Topic_ID"),
-            knext.Column(knext.string(), "Term"),
-            knext.Column(knext.double(), "Weight")
-        ])
-        
-        # Output schema 3: Model summary statistics
-        schema3 = knext.Schema([
-            knext.Column(knext.int64(), "Num_Topics"),
-            knext.Column(knext.int64(), "Num_Documents"),
-            knext.Column(knext.string(), "Embedding_Model"),
-            knext.Column(knext.string(), "Clustering_Method")
-        ])
-        
-        return schema1, schema2, schema3
+        # Return the same schema with an additional column
+        return input_schema.append(knext.Column(knext.string(), "Processed_Text"))
 
-    def execute(self, exec_context, input_1):
-        # Convert input to pandas DataFrame
-        input_1_pandas = input_1.to_pandas()
+    def execute(self, exec_context, input_table):
+        # Convert to pandas
+        df = input_table.to_pandas()
         
-        # Check if execution was canceled
-        kutil.check_canceled(exec_context)
+        # Simple text processing - add length
+        df['Processed_Text'] = df[self.text_column].astype(str) + " [Length: " + df[self.text_column].astype(str).str.len().astype(str) + "]"
         
-        # Get the text documents
-        documents = input_1_pandas[self.text_column].dropna().tolist()
-        
-        if not documents:
-            raise ValueError("No valid text documents found in the selected column.")
-        
-        # Set up embedding model
-        embedding_model = None
-        if self.embedding_model_param == "SentenceTransformers":
-            if not SENTENCE_TRANSFORMERS_AVAILABLE:
-                raise ValueError("SentenceTransformers is not available. Please install it with: pip install sentence-transformers")
-            embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        elif self.embedding_model_param == "Flair":
-            if not FLAIR_AVAILABLE:
-                raise ValueError("Flair is not available. Please install it with: pip install flair")
-            embedding_model = TransformerDocumentEmbeddings('bert-base-uncased')
-        # Use BERTopic's default embedding model if "Default" is selected
-        
-        # Set up clustering model
-        cluster_model = None
-        if self.clustering_method == "HDBSCAN":
-            if not HDBSCAN_AVAILABLE:
-                raise ValueError("HDBSCAN is not available. Please install it with: pip install hdbscan")
-            cluster_model = hdbscan.HDBSCAN(min_cluster_size=15, metric='euclidean', 
-                                          cluster_selection_method='eom', prediction_data=True)
-        elif self.clustering_method == "KMeans":
-            if not SKLEARN_AVAILABLE:
-                raise ValueError("scikit-learn is not available. Please install it with: pip install scikit-learn")
-            cluster_model = KMeans(n_clusters=self.nr_topics_param, random_state=42)
-        # Use BERTopic's default clustering if "Default" is selected
-        
-        # Create and fit BERTopic model
-        topic_model_params = {
-            'language': self.language_param,
-            'calculate_probabilities': self.probabilities_param,
-            'nr_topics': self.nr_topics_param
-        }
-        
-        # Only add optional parameters if they are not None
-        if embedding_model is not None:
-            topic_model_params['embedding_model'] = embedding_model
-        if cluster_model is not None and self.clustering_method == "HDBSCAN":
-            topic_model_params['hdbscan_model'] = cluster_model
-            
-        topic_model = BERTopic(**topic_model_params)
-        
-        # Fit the model and get topics
-        topics, probs = topic_model.fit_transform(documents)
-        
-        # Add topics to the input dataframe
-        # Handle case where input has more rows than valid documents
-        input_1_pandas['Topics'] = -1  # Default for missing/invalid documents
-        valid_indices = input_1_pandas[self.text_column].dropna().index
-        input_1_pandas.loc[valid_indices, 'Topics'] = topics
-        
-        # Prepare output table 1: Documents with topics
-        output_1 = knext.Table.from_pandas(input_1_pandas)
-        
-        # Prepare output table 2: Topic-word probabilities
-        topic_info = []
-        all_topics = topic_model.get_topics()
-        
-        for topic_id, words in all_topics.items():
-            for word, weight in words:
-                topic_info.append({
-                    'Topic_ID': topic_id,
-                    'Term': word,
-                    'Weight': weight
-                })
-        
-        topic_info_df = pd.DataFrame(topic_info)
-        output_2 = knext.Table.from_pandas(topic_info_df)
-        
-        # Prepare output table 3: Model summary
-        summary_data = pd.DataFrame({
-            'Num_Topics': [len(all_topics)],
-            'Num_Documents': [len(documents)],
-            'Embedding_Model': [self.embedding_model_param],
-            'Clustering_Method': [self.clustering_method]
-        })
-        output_3 = knext.Table.from_pandas(summary_data)
-        
-        return output_1, output_2, output_3
+        # Convert back to KNIME table
+        return knext.Table.from_pandas(df)
