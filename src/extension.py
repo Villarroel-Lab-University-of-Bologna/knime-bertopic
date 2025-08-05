@@ -25,18 +25,57 @@ LOGGER = logging.getLogger(__name__)
     node_type=knext.NodeType.LEARNER, 
     icon_path="icons/icon.png", 
     category="/")
+
 @knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
-@knext.output_table(name="Output Table", description="Table with topic assignments.")
+@knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities.")
+@knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic.")
+@knext.output_table(name="Model Fit Summary", description="Basic statistics and evaluation metrics from model fitting.")
 class BERTopicNode:
     """Use BERTopic to extract topics from documents."""
     
     text_column = knext.ColumnParameter(
         "Text Column",
         "Column containing input documents.",
-        port_index=0,
-        column_filter=lambda col: col.ktype == knext.string()
+        column_filter=kutil.is_string
     )
 
+    embedding_model_param = knext.StringParameter(
+        label="Embedding Model",
+        description="Type of embedding model to use for BERTopic.",
+        default_value="SentenceTransformers",
+        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"],
+        is_advanced=True
+    )
+
+    clustering_method = knext.StringParameter(
+        label="Clustering Method",
+        description="Clustering algorithm to use within BERTopic.",
+        default_value="HDBSCAN",
+        enum=["HDBSCAN", "KMeans"],
+        is_advanced=True
+    )
+    
+    language_param = knext.StringParameter(
+        label="Language",
+        description="Language for topic modeling.",
+        default_value="english",
+        enum=["english", "multilingual"],
+        is_advanced=True
+    )
+    
+    probabilities_param = knext.BoolParameter(
+        label="Calculate Probabilities",
+        description="Whether to calculate topic probabilities for documents.",
+        default_value=True,
+        is_advanced=True
+    )
+    
+    nr_topics_param = knext.IntParameter(
+        label="Number of Topics",
+        description="Number of topics to extract. Use 'auto' for automatic selection.",
+        default_value=20,
+        is_advanced=True
+    )
     def configure(self, config_context, input_schema):
         # Simple output: input + topic column
         return input_schema.append(knext.Column(knext.int64(), "Topic"))
