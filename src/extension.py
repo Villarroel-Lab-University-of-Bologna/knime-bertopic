@@ -73,20 +73,19 @@ class BERTopicNode:
         schema1 = input_schema.append(knext.Column(knext.int64(), "Topic"))
         
         # Output 2: Topic-word probabilities
-        schema2 = knext.Schema([
-            knext.Column(knext.int64(), "Topic_ID"),
+        schema2 = knext.Schema.from_columns([
+            knext.Column(knext.int32(), "Topic_ID"),
             knext.Column(knext.string(), "Word"),
             knext.Column(knext.double(), "Probability")
         ])
         
         # Output 3: Model summary
-        schema3 = knext.Schema([
+        schema3 = knext.Schema.from_columns([
             knext.Column(knext.string(), "Metric"),
             knext.Column(knext.string(), "Value")
         ])
         
         return schema1, schema2, schema3
-
 
     def execute(self, exec_context, input_table):
         # Convert to pandas
