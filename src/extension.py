@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import CountVectorizer
 import hdbscan
-
+import utils.knutils as kutil
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class BERTopicNode:
         "Text Column",
         "Column containing input documents.",
         port_index=0,
-        column_filter=lambda col: col.ktype == knext.string()
+        column_filter=kutil.is_string
     )
     
     embedding_model = knext.StringParameter(
