@@ -10,16 +10,6 @@ import utils.knutils as kutil
 
 LOGGER = logging.getLogger(__name__)
 
-try:
-    from bertopic import BERTopic
-    BERTOPIC_AVAILABLE = True
-except ImportError as e:
-    BERTOPIC_AVAILABLE = False
-    print(f"BERTopic import failed: {e}")
-
-LOGGER = logging.getLogger(__name__)
-
-
 @knext.node(
     name="Topic Extractor (BERTopic)", 
     node_type=knext.NodeType.LEARNER, 
@@ -99,12 +89,9 @@ class BERTopicNode:
 
 
     def execute(self, exec_context, input_table):
-        if not BERTOPIC_AVAILABLE:
-            raise RuntimeError("BERTopic is not available. Please check installation.")
-            
         # Convert to pandas
         df = input_table.to_pandas()
-        
+        '''
         # Get documents
         documents = df[self.text_column].dropna().astype(str).tolist()
         
@@ -200,5 +187,5 @@ class BERTopicNode:
             ]
         })
         output3 = knext.Table.from_pandas(summary_data)
-        
-        return output1, output2, output3
+        '''
+        return df
