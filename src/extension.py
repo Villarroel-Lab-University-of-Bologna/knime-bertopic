@@ -10,6 +10,15 @@ import utils.knutils as kutil
 
 LOGGER = logging.getLogger(__name__)
 
+try:
+    from bertopic import BERTopic
+    BERTOPIC_AVAILABLE = True
+except ImportError as e:
+    BERTOPIC_AVAILABLE = False
+    print(f"BERTopic import failed: {e}")
+
+LOGGER = logging.getLogger(__name__)
+
 
 @knext.node(
     name="Topic Extractor (BERTopic)", 
@@ -17,9 +26,7 @@ LOGGER = logging.getLogger(__name__)
     icon_path="icons/icon.png", 
     category="/")
 @knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
-@knext.output_table(name="Document Topics", description="Documents with topic assignments.")
-@knext.output_table(name="Topic Words", description="Topic-word probabilities for each topic.")
-@knext.output_table(name="Model Summary", description="Basic statistics from model fitting.")
+@knext.output_table(name="Output Table", description="Table with topic assignments.")
 class BERTopicNode:
     """Use BERTopic to extract topics from documents."""
     
@@ -27,86 +34,17 @@ class BERTopicNode:
         "Text Column",
         "Column containing input documents.",
         port_index=0,
-        column_filter=kutil.is_string
-    )
-    
-    embedding_model = knext.StringParameter(
-        label="Embedding Model",
-        description="Type of embedding model to use.",
-        default_value="Default",
-        enum=["Default", "SentenceTransformers", "TF-IDF"],
-        is_advanced=True
-    )
-    
-    sentence_transformer_model = knext.StringParameter(
-        label="SentenceTransformer Model",
-        description="Specific SentenceTransformer model to use.",
-        default_value="all-MiniLM-L6-v2",
-        enum=[
-            "all-MiniLM-L6-v2",
-            "all-mpnet-base-v2",
-            "paraphrase-MiniLM-L6-v2",
-            "distilbert-base-nli-stsb-mean-tokens"
-        ],
-        is_advanced=True
-    )
-    
-    clustering_method = knext.StringParameter(
-        label="Clustering Method",
-        description="Clustering algorithm to use.",
-        default_value="Default",
-        enum=["Default", "HDBSCAN", "KMeans"],
-        is_advanced=True
-    )
-    
-    language_param = knext.StringParameter(
-        label="Language",
-        description="Language for topic modeling.",
-        default_value="english",
-        enum=["english", "multilingual"]
-    )
-    
-    calculate_probabilities = knext.BoolParameter(
-        label="Calculate Probabilities",
-        description="Whether to calculate topic probabilities for documents.",
-        default_value=True
-    )
-    
-    nr_topics = knext.IntParameter(
-        label="Number of Topics",
-        description="Target number of topics to extract.",
-        default_value=20,
-        is_advanced=True
-    )
-    
-    min_topic_size = knext.IntParameter(
-        label="Minimum Topic Size",
-        description="Minimum number of documents required to form a topic.",
-        default_value=10,
-        is_advanced=True
+        column_filter=lambda col: col.ktype == knext.string()
     )
 
     def configure(self, config_context, input_schema):
-        # Output 1: Documents with topics
-        schema1 = input_schema.append(knext.Column(knext.int64(), "Topic"))
-        
-        # Output 2: Topic-word probabilities
-        schema2 = knext.Schema([
-            knext.Column(knext.int64(), "Topic_ID"),
-            knext.Column(knext.string(), "Word"),
-            knext.Column(knext.double(), "Probability")
-        ])
-        
-        # Output 3: Model summary
-        schema3 = knext.Schema([
-            knext.Column(knext.string(), "Metric"),
-            knext.Column(knext.string(), "Value")
-        ])
-        
-        return schema1, schema2, schema3
+        # Simple output: input + topic column
+        return input_schema.append(knext.Column(knext.int64(), "Topic"))
 
     def execute(self, exec_context, input_table):
-          
+        if not BERTOPIC_AVAILABLE:
+            raise RuntimeError("BERTopic is not available. Please check installation.")
+            
         # Convert to pandas
         df = input_table.to_pandas()
         
@@ -116,94 +54,14 @@ class BERTopicNode:
         if not documents:
             raise ValueError("No valid documents found.")
         
-        # Set up embedding model
-        embedding_model = None
-        if self.embedding_model == "SentenceTransformers":
-            embedding_model = SentenceTransformer(self.sentence_transformer_model)
-        elif self.embedding_model == "TF-IDF":
-            # TF-IDF will be handled by BERTopic's vectorizer model
-            pass
+        # Simple BERTopic usage with defaults
+        topic_model = BERTopic()
+        topics, _ = topic_model.fit_transform(documents)
         
-        # Set up clustering model
-        cluster_model = None
-        if self.clustering_method == "HDBSCAN":
-            cluster_model = hdbscan.HDBSCAN(
-                min_cluster_size=self.min_topic_size,
-                metric='euclidean',
-                cluster_selection_method='eom',
-                prediction_data=True
-            )
-        elif self.clustering_method == "KMeans":
-            cluster_model = KMeans(n_clusters=self.nr_topics, random_state=42)
-        
-        # Set up vectorizer for TF-IDF option
-        vectorizer_model = None
-        if self.embedding_model == "TF-IDF":
-            vectorizer_model = CountVectorizer(ngram_range=(1, 2), stop_words="english")
-        
-        # Create BERTopic model parameters
-        bertopic_params = {
-            'language': self.language_param,
-            'calculate_probabilities': self.calculate_probabilities,
-            'min_topic_size': self.min_topic_size
-        }
-        
-        # Add optional parameters
-        if embedding_model is not None:
-            bertopic_params['embedding_model'] = embedding_model
-        if cluster_model is not None:
-            bertopic_params['hdbscan_model'] = cluster_model
-        if vectorizer_model is not None:
-            bertopic_params['vectorizer_model'] = vectorizer_model
-        if self.nr_topics > 0 and self.clustering_method != "KMeans":
-            bertopic_params['nr_topics'] = self.nr_topics
-        
-        # Create and fit BERTopic model
-        topic_model = BERTopic(**bertopic_params)
-        topics, probabilities = topic_model.fit_transform(documents)
-        
-        # Prepare Output 1: Documents with topics
+        # Add topics back to dataframe
         df['Topic'] = -1  # Default for all rows
         valid_indices = df[self.text_column].dropna().index
         df.loc[valid_indices, 'Topic'] = topics
-        output1 = knext.Table.from_pandas(df)
         
-        # Prepare Output 2: Topic-word probabilities
-        topic_words_data = []
-        all_topics = topic_model.get_topics()
-        
-        for topic_id, words in all_topics.items():
-            for word, prob in words:
-                topic_words_data.append({
-                    'Topic_ID': topic_id,
-                    'Word': word,
-                    'Probability': prob
-                })
-        
-        topic_words_df = pd.DataFrame(topic_words_data)
-        output2 = knext.Table.from_pandas(topic_words_df)
-        
-        # Prepare Output 3: Model summary
-        summary_data = pd.DataFrame({
-            'Metric': [
-                'Number of Topics', 
-                'Number of Documents', 
-                'Number of Outliers',
-                'Embedding Model',
-                'Clustering Method',
-                'Language',
-                'Min Topic Size'
-            ],
-            'Value': [
-                str(len(all_topics)),
-                str(len(documents)),
-                str(sum(1 for t in topics if t == -1)),
-                self.embedding_model,
-                self.clustering_method,
-                self.language_param,
-                str(self.min_topic_size)
-            ]
-        })
-        output3 = knext.Table.from_pandas(summary_data)
-        
-        return output1, output2, output3
+
+        return knext.Table.from_pandas(df)
