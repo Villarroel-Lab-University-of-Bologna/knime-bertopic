@@ -90,7 +90,7 @@ class BERTopicNode:
     def execute(self, exec_context, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
-        '''
+        
         # Get documents
         documents = df[self.text_column].dropna().astype(str).tolist()
         
@@ -186,5 +186,6 @@ class BERTopicNode:
             ]
         })
         output3 = knext.Table.from_pandas(summary_data)
-        '''
-        return df
+        
+        # Return outputs
+        return output1, output2, output3
