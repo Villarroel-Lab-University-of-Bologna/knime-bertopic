@@ -31,17 +31,30 @@ class BERTopicNode:
 
     embedding_method = knext.StringParameter(
         label="Embedding Model",
-        description="Type of embedding model to use for BERTopic.",
-        default_value="SentenceTransformers",
-        enum=["SentenceTransformers", "Flair", "Spacy", "Gensim"],
+        description="Type of embedding model to use.",
+        default_value="Default",
+        enum=["Default", "SentenceTransformers", "TF-IDF"],
+        is_advanced=True
+    )
+
+    sentence_transformer_model = knext.StringParameter(
+        label="SentenceTransformer Model",
+        description="Specific SentenceTransformer model to use.",
+        default_value="all-MiniLM-L6-v2",
+        enum=[
+            "all-MiniLM-L6-v2",
+            "all-mpnet-base-v2",
+            "paraphrase-MiniLM-L6-v2",
+            "distilbert-base-nli-stsb-mean-tokens"
+        ],
         is_advanced=True
     )
 
     clustering_method = knext.StringParameter(
         label="Clustering Method",
-        description="Clustering algorithm to use within BERTopic.",
-        default_value="HDBSCAN",
-        enum=["HDBSCAN", "KMeans"],
+        description="Clustering algorithm to use.",
+        default_value="Default",
+        enum=["Default", "HDBSCAN", "KMeans"],
         is_advanced=True
     )
     
@@ -52,18 +65,24 @@ class BERTopicNode:
         enum=["english", "multilingual"]
     )
     
-    probabilities_param = knext.BoolParameter(
+    calculate_probabilities = knext.BoolParameter(
         label="Calculate Probabilities",
         description="Whether to calculate topic probabilities for documents.",
         default_value=True
     )
     
-    nr_topics_param = knext.IntParameter(
+    nr_topics = knext.IntParameter(
         label="Number of Topics",
         description="Number of topics to extract. Use 'auto' for automatic selection.",
         default_value=20
     )
 
+    min_topic_size = knext.IntParameter(
+        label="Minimum Topic Size",
+        description="Minimum number of documents required to form a topic.",
+        default_value=10,
+        is_advanced=True
+    )
 
     def configure(self, config_context, input_schema):
         # Output 1: Documents with topics
@@ -176,7 +195,7 @@ class BERTopicNode:
                 str(len(all_topics)),
                 str(len(documents)),
                 str(sum(1 for t in topics if t == -1)),
-                self.embedding_model,
+                self.embedding_method,
                 self.clustering_method,
                 self.language_param,
                 str(self.min_topic_size)
