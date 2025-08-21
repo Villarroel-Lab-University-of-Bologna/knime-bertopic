@@ -29,7 +29,7 @@ class BERTopicNode:
         column_filter=kutil.is_string
     )
 
-    embedding_model_param = knext.StringParameter(
+    embedding_method = knext.StringParameter(
         label="Embedding Model",
         description="Type of embedding model to use for BERTopic.",
         default_value="SentenceTransformers",
@@ -96,9 +96,9 @@ class BERTopicNode:
         
         # Set up embedding model
         embedding_model = None
-        if self.embedding_model == "SentenceTransformers":
+        if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
-        elif self.embedding_model == "TF-IDF":
+        elif self.embedding_method == "TF-IDF":
             # TF-IDF will be handled by BERTopic's vectorizer model
             pass
         
@@ -116,7 +116,7 @@ class BERTopicNode:
         
         # Set up vectorizer for TF-IDF option
         vectorizer_model = None
-        if self.embedding_model == "TF-IDF":
+        if self.embedding_method == "TF-IDF":
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), stop_words="english")
         
         # Create BERTopic model parameters
