@@ -49,22 +49,19 @@ class BERTopicNode:
         label="Language",
         description="Language for topic modeling.",
         default_value="english",
-        enum=["english", "multilingual"],
-        is_advanced=True
+        enum=["english", "multilingual"]
     )
     
     probabilities_param = knext.BoolParameter(
         label="Calculate Probabilities",
         description="Whether to calculate topic probabilities for documents.",
-        default_value=True,
-        is_advanced=True
+        default_value=True
     )
     
     nr_topics_param = knext.IntParameter(
         label="Number of Topics",
         description="Number of topics to extract. Use 'auto' for automatic selection.",
-        default_value=20,
-        is_advanced=True
+        default_value=20
     )
 
 
