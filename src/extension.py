@@ -74,13 +74,13 @@ class BERTopicNode:
     nr_topics = knext.IntParameter(
         label="Number of Topics",
         description="Number of topics to extract. Use 'auto' for automatic selection.",
-        default_value=20
+        default_value=10
     )
 
     min_topic_size = knext.IntParameter(
         label="Minimum Topic Size",
         description="Minimum number of documents required to form a topic.",
-        default_value=10,
+        default_value=5,
         is_advanced=True
     )
 
