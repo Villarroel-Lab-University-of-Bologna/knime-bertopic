@@ -32,8 +32,8 @@ class BERTopicNode:
     embedding_method = knext.StringParameter(
         label="Embedding Method",
         description="Method for generating document embeddings.",
-        default_value="sentence-transformers",
-        enum=["sentence-transformers", "tfidf"],
+        default_value="SentenceTransformers",
+        enum=["SentenceTransformers", "TF-IDF"],
         is_advanced=False
     )
     
@@ -82,7 +82,7 @@ class BERTopicNode:
 
     def configure(self, config_context, input_schema):
         # Output 1: Documents with topics
-        schema1 = input_schema.append(knext.Column(knext.int64(), "Topic"))
+        schema1 = input_schema.append(knext.Column(knext.int32(), "Topic"))
         
         # Output 2: Topic-word probabilities
         schema2 = knext.Schema.from_columns([
@@ -113,9 +113,9 @@ class BERTopicNode:
         embedding_model = None
         vectorizer_model = None
         
-        if self.embedding_method == "sentence-transformers":
+        if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
-        elif self.embedding_method == "tfidf":
+        elif self.embedding_method == "TF-IDF":
             # Use TF-IDF vectorizer instead of sentence transformers
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), stop_words="english")
         
@@ -161,9 +161,10 @@ class BERTopicNode:
         topics, probabilities = topic_model.fit_transform(documents)
         
         # Prepare Output 1: Documents with topics
+        df = df.copy()  # Avoid modifying the original dataframe
         df['Topic'] = -1  # Default for all rows
         valid_indices = df[self.text_column].dropna().index
-        df.loc[valid_indices, 'Topic'] = topics
+        df.loc[valid_indices, 'Topic'] = pd.Series(topics, dtype='int32').values
         output1 = knext.Table.from_pandas(df)
         
         # Prepare Output 2: Topic-word probabilities
@@ -173,12 +174,17 @@ class BERTopicNode:
         for topic_id, words in all_topics.items():
             for word, prob in words:
                 topic_words_data.append({
-                    'Topic_ID': topic_id,
-                    'Word': word,
-                    'Probability': prob
+                    'Topic_ID': int(topic_id),  # Ensure int32
+                    'Word': str(word),          # Ensure string
+                    'Probability': float(prob)  # Ensure double/float
                 })
         
         topic_words_df = pd.DataFrame(topic_words_data)
+        # Explicitly set dtypes to match schema
+        if not topic_words_df.empty:
+            topic_words_df['Topic_ID'] = topic_words_df['Topic_ID'].astype('int32')
+            topic_words_df['Word'] = topic_words_df['Word'].astype('string')
+            topic_words_df['Probability'] = topic_words_df['Probability'].astype('float64')
         output2 = knext.Table.from_pandas(topic_words_df)
         
         # Prepare Output 3: Model summary
