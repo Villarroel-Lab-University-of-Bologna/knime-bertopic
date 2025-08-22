@@ -30,51 +30,54 @@ class BERTopicNode:
     )
 
     embedding_method = knext.StringParameter(
-        label="Embedding Model",
-        description="Type of embedding model to use.",
-        default_value="SentenceTransformers",
-        enum=["SentenceTransformers", "TF-IDF"],
-        is_advanced=True
+        label="Embedding Method",
+        description="Method for generating document embeddings.",
+        default_value="sentence-transformers",
+        enum=["sentence-transformers", "tfidf"],
+        is_advanced=False
     )
-
+    
     sentence_transformer_model = knext.StringParameter(
-        label="SentenceTransformer Model",
-        description="Specific SentenceTransformer model to use.",
+        label="Sentence Transformer Model",
+        description="Pre-trained model name for sentence embeddings.",
         default_value="all-MiniLM-L6-v2",
-        enum=[
-            "all-MiniLM-L6-v2",
-            "all-mpnet-base-v2",
-            "paraphrase-MiniLM-L6-v2",
-            "distilbert-base-nli-stsb-mean-tokens"
-        ],
+        enum=["all-MiniLM-L6-v2", "all-mpnet-base-v2", "paraphrase-multilingual-MiniLM-L12-v2"],
         is_advanced=True
     )
 
     clustering_method = knext.StringParameter(
         label="Clustering Method",
-        description="Clustering algorithm to use.",
+        description="Clustering algorithm to use within BERTopic.",
         default_value="HDBSCAN",
         enum=["HDBSCAN", "KMeans"],
         is_advanced=True
     )
-      
+    
+    language_param = knext.StringParameter(
+        label="Language",
+        description="Language for topic modeling.",
+        default_value="english",
+        enum=["english", "multilingual"]
+    )
+    
     calculate_probabilities = knext.BoolParameter(
         label="Calculate Probabilities",
         description="Whether to calculate topic probabilities for documents.",
         default_value=True
     )
     
-    nr_topics = knext.IntParameter(
+    nr_topics_param = knext.IntParameter(
         label="Number of Topics",
-        description="Number of topics to extract. Use 'auto' for automatic selection.",
-        default_value=10
+        description="Number of topics to extract. Use 0 for automatic selection.",
+        default_value=0,
+        min_value=0
     )
-
+    
     min_topic_size = knext.IntParameter(
         label="Minimum Topic Size",
         description="Minimum number of documents required to form a topic.",
-        default_value=5,
-        is_advanced=True
+        default_value=10,
+        min_value=2
     )
 
     def configure(self, config_context, input_schema):
@@ -108,11 +111,13 @@ class BERTopicNode:
         
         # Set up embedding model
         embedding_model = None
-        if self.embedding_method == "SentenceTransformers":
+        vectorizer_model = None
+        
+        if self.embedding_method == "sentence-transformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
-        elif self.embedding_method == "TF-IDF":
-            # TF-IDF will be handled by BERTopic's vectorizer model
-            pass
+        elif self.embedding_method == "tfidf":
+            # Use TF-IDF vectorizer instead of sentence transformers
+            vectorizer_model = CountVectorizer(ngram_range=(1, 2), stop_words="english")
         
         # Set up clustering model
         cluster_model = None
@@ -124,28 +129,32 @@ class BERTopicNode:
                 prediction_data=True
             )
         elif self.clustering_method == "KMeans":
-            cluster_model = KMeans(n_clusters=self.nr_topics, random_state=42)
-        
-        # Set up vectorizer for TF-IDF option
-        vectorizer_model = None
-        if self.embedding_method == "TF-IDF":
-            vectorizer_model = CountVectorizer(ngram_range=(1, 2), stop_words="english")
+            n_clusters = self.nr_topics_param if self.nr_topics_param > 0 else 10
+            cluster_model = KMeans(n_clusters=n_clusters, random_state=42)
         
         # Create BERTopic model parameters
         bertopic_params = {
+            'language': self.language_param,
             'calculate_probabilities': self.calculate_probabilities,
             'min_topic_size': self.min_topic_size
         }
         
-        # Add optional parameters
+        # Add embedding or vectorizer model
         if embedding_model is not None:
             bertopic_params['embedding_model'] = embedding_model
-        if cluster_model is not None:
-            bertopic_params['hdbscan_model'] = cluster_model
         if vectorizer_model is not None:
             bertopic_params['vectorizer_model'] = vectorizer_model
-        if self.nr_topics > 0 and self.clustering_method != "KMeans":
-            bertopic_params['nr_topics'] = self.nr_topics
+            
+        # Add clustering model
+        if cluster_model is not None:
+            if self.clustering_method == "HDBSCAN":
+                bertopic_params['hdbscan_model'] = cluster_model
+            else:  # KMeans
+                bertopic_params['hdbscan_model'] = cluster_model
+        
+        # Set number of topics for automatic reduction (only for HDBSCAN)
+        if self.nr_topics_param > 0 and self.clustering_method == "HDBSCAN":
+            bertopic_params['nr_topics'] = self.nr_topics_param
         
         # Create and fit BERTopic model
         topic_model = BERTopic(**bertopic_params)
@@ -178,8 +187,9 @@ class BERTopicNode:
                 'Number of Topics', 
                 'Number of Documents', 
                 'Number of Outliers',
-                'Embedding Model',
-                'Clustering Method'
+                'Embedding Method',
+                'Clustering Method',
+                'Language',
                 'Min Topic Size'
             ],
             'Value': [
@@ -188,6 +198,7 @@ class BERTopicNode:
                 str(sum(1 for t in topics if t == -1)),
                 self.embedding_method,
                 self.clustering_method,
+                self.language_param,
                 str(self.min_topic_size)
             ]
         })
