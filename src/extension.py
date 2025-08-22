@@ -188,27 +188,21 @@ class BERTopicNode:
         output2 = knext.Table.from_pandas(topic_words_df)
         
         # Prepare Output 3: Model summary
-        summary_data = pd.DataFrame({
-            'Metric': [
-                'Number of Topics', 
-                'Number of Documents', 
-                'Number of Outliers',
-                'Embedding Method',
-                'Clustering Method',
-                'Language',
-                'Min Topic Size'
-            ],
-            'Value': [
-                str(len(all_topics)),
-                str(len(documents)),
-                str(sum(1 for t in topics if t == -1)),
-                self.embedding_method,
-                self.clustering_method,
-                self.language_param,
-                str(self.min_topic_size)
-            ]
-        })
-        output3 = knext.Table.from_pandas(summary_data)
+        summary_data = [
+            ['Number of Topics', str(len(all_topics))],
+            ['Number of Documents', str(len(documents))],
+            ['Number of Outliers', str(sum(1 for t in topics if t == -1))],
+            ['Embedding Method', str(self.embedding_method)],
+            ['Clustering Method', str(self.clustering_method)],
+            ['Language', str(self.language_param)],
+            ['Min Topic Size', str(self.min_topic_size)]
+        ]
+        
+        summary_df = pd.DataFrame(summary_data, columns=['Metric', 'Value'])
+        # Explicitly set dtypes to match schema
+        summary_df['Metric'] = summary_df['Metric'].astype('string')
+        summary_df['Value'] = summary_df['Value'].astype('string')
+        output3 = knext.Table.from_pandas(summary_df)
         
         # Return outputs
         return output1, output2, output3
