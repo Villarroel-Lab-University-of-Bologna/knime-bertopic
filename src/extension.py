@@ -57,14 +57,7 @@ class BERTopicNode:
         enum=["HDBSCAN", "KMeans"],
         is_advanced=True
     )
-    
-    language_param = knext.StringParameter(
-        label="Language",
-        description="Language for topic modeling.",
-        default_value="english",
-        enum=["english", "multilingual"]
-    )
-    
+      
     calculate_probabilities = knext.BoolParameter(
         label="Calculate Probabilities",
         description="Whether to calculate topic probabilities for documents.",
@@ -140,7 +133,6 @@ class BERTopicNode:
         
         # Create BERTopic model parameters
         bertopic_params = {
-            'language': self.language_param,
             'calculate_probabilities': self.calculate_probabilities,
             'min_topic_size': self.min_topic_size
         }
@@ -187,8 +179,7 @@ class BERTopicNode:
                 'Number of Documents', 
                 'Number of Outliers',
                 'Embedding Model',
-                'Clustering Method',
-                'Language',
+                'Clustering Method'
                 'Min Topic Size'
             ],
             'Value': [
@@ -197,7 +188,6 @@ class BERTopicNode:
                 str(sum(1 for t in topics if t == -1)),
                 self.embedding_method,
                 self.clustering_method,
-                self.language_param,
                 str(self.min_topic_size)
             ]
         })
