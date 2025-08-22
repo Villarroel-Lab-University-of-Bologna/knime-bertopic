@@ -81,23 +81,16 @@ class BERTopicNode:
     )
 
     def configure(self, config_context, input_schema):
-        # Output 1: Documents with topics
+        # Check if text column is selected
+        if self.text_column is None:
+            raise knext.InvalidParametersError("Text column must be selected.")
+        
+        # Output 1: Documents with topics (append Topic column to input)
         schema1 = input_schema.append(knext.Column(knext.int32(), "Topic"))
         
-        # Output 2: Topic-word probabilities
-        schema2 = knext.Schema.from_columns([
-            knext.Column(knext.int32(), "Topic_ID"),
-            knext.Column(knext.string(), "Word"),
-            knext.Column(knext.double(), "Probability")
-        ])
-        
-        # Output 3: Model summary
-        schema3 = knext.Schema.from_columns([
-            knext.Column(knext.string(), "Metric"),
-            knext.Column(knext.string(), "Value")
-        ])
-        
-        return schema1, schema2, schema3
+        # Output 2 & 3: Let KNIME infer the schema during execution for topic-word and summary tables
+        # This avoids DataSpec mismatch issues
+        return schema1, None, None
 
     def execute(self, exec_context, input_table):
         # Convert to pandas
@@ -174,34 +167,37 @@ class BERTopicNode:
         for topic_id, words in all_topics.items():
             for word, prob in words:
                 topic_words_data.append({
-                    'Topic_ID': int(topic_id),  # Ensure int32
-                    'Word': str(word),          # Ensure string
-                    'Probability': float(prob)  # Ensure double/float
+                    'Topic_ID': topic_id,
+                    'Word': word,
+                    'Probability': prob
                 })
         
         topic_words_df = pd.DataFrame(topic_words_data)
-        # Explicitly set dtypes to match schema
-        if not topic_words_df.empty:
-            topic_words_df['Topic_ID'] = topic_words_df['Topic_ID'].astype('int32')
-            topic_words_df['Word'] = topic_words_df['Word'].astype('string')
-            topic_words_df['Probability'] = topic_words_df['Probability'].astype('float64')
         output2 = knext.Table.from_pandas(topic_words_df)
         
         # Prepare Output 3: Model summary
-        summary_data = [
-            ['Number of Topics', str(len(all_topics))],
-            ['Number of Documents', str(len(documents))],
-            ['Number of Outliers', str(sum(1 for t in topics if t == -1))],
-            ['Embedding Method', str(self.embedding_method)],
-            ['Clustering Method', str(self.clustering_method)],
-            ['Language', str(self.language_param)],
-            ['Min Topic Size', str(self.min_topic_size)]
-        ]
+        summary_data = {
+            'Metric': [
+                'Number of Topics', 
+                'Number of Documents', 
+                'Number of Outliers',
+                'Embedding Method',
+                'Clustering Method',
+                'Language',
+                'Min Topic Size'
+            ],
+            'Value': [
+                len(all_topics),
+                len(documents),
+                sum(1 for t in topics if t == -1),
+                self.embedding_method,
+                self.clustering_method,
+                self.language_param,
+                self.min_topic_size
+            ]
+        }
         
-        summary_df = pd.DataFrame(summary_data, columns=['Metric', 'Value'])
-        # Explicitly set dtypes to match schema
-        summary_df['Metric'] = summary_df['Metric'].astype('string')
-        summary_df['Value'] = summary_df['Value'].astype('string')
+        summary_df = pd.DataFrame(summary_data)
         output3 = knext.Table.from_pandas(summary_df)
         
         # Return outputs
