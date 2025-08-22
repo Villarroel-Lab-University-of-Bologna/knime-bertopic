@@ -32,8 +32,8 @@ class BERTopicNode:
     embedding_method = knext.StringParameter(
         label="Embedding Model",
         description="Type of embedding model to use.",
-        default_value="Default",
-        enum=["Default", "SentenceTransformers", "TF-IDF"],
+        default_value="SentenceTransformers",
+        enum=["SentenceTransformers", "TF-IDF"],
         is_advanced=True
     )
 
@@ -53,8 +53,8 @@ class BERTopicNode:
     clustering_method = knext.StringParameter(
         label="Clustering Method",
         description="Clustering algorithm to use.",
-        default_value="Default",
-        enum=["Default", "HDBSCAN", "KMeans"],
+        default_value="HDBSCAN",
+        enum=["HDBSCAN", "KMeans"],
         is_advanced=True
     )
     
