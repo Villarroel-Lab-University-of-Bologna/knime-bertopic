@@ -22,19 +22,11 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Model Fit Summary", description="Basic statistics and evaluation metrics from model fitting.")
 class BERTopicNode:
     """Use BERTopic to extract topics from documents."""
-    '''
-    text_column = knext.ColumnParameter(
-        "Text Column",
-        "Column containing input documents.",
-        column_filter=kutil.is_string
-    )
-    '''
-    
+   
     document_column_param = knext.ColumnParameter(
         label="Document column", 
         description="Documents from which topics should be extracted", 
-        port_index=0, 
-        column_filter=kutil.is_string)
+        port_index=0)
 
     embedding_method = knext.StringParameter(
         label="Embedding Method",
@@ -112,10 +104,6 @@ class BERTopicNode:
 
         # Get documents
         documents = df[self.document_column_param].to_list()
-        topic_model = BERTopic(language=self.language_param, calculate_probabilities=self.probabilities_param, nr_topics=20)
-        topics, probs = topic_model.fit_transform(documents)
-        df['Topics'] = topics
-
         
         if not documents:
             raise ValueError("No valid documents found.")
@@ -168,7 +156,7 @@ class BERTopicNode:
             bertopic_params['nr_topics'] = self.nr_topics_param
         
         # Create and fit BERTopic model
-        topic_model = BERTopic(language=self.language_param, calculate_probabilities=self.probabilities_param, nr_topics=20)
+        topic_model = BERTopic(**bertopic_params)
         topics, probs = topic_model.fit_transform(df[self.document_column_param].to_list())
         df['Topic'] = topics
 
