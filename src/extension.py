@@ -33,8 +33,7 @@ class BERTopicNode:
     document_column_param = knext.ColumnParameter(
         label="Document column", 
         description="Documents from which topics should be extracted", 
-        port_index=0, 
-        column_filter=kutil.is_string)
+        port_index=0)
 
     embedding_method = knext.StringParameter(
         label="Embedding Method",
@@ -92,14 +91,17 @@ class BERTopicNode:
         schema1 = input_schema.append(knext.Column(knext.int32(), "Topic"))
         
         # Output 2: Topic-word probabilities
+        '''
         schema2 = knext.Schema.from_columns([
             knext.Column(knext.int32(), "Topic_ID"),
             knext.Column(knext.string(), "Word"),
             knext.Column(knext.double(), "Probability")
         ])
-        
+        '''
+        schema2 = knext.Schema([knext.int64(), knext.list_(inner_type=knext.string()), knext.list_(inner_type=knext.double())], ["Topic ID", "Term", "Weight"])
+
         # Output 3: Model summary
-        schema3 = knext.Schema.from_columns([
+        schema3 = knext.Schema([
             knext.Column(knext.string(), "Metric"),
             knext.Column(knext.string(), "Value")
         ])
