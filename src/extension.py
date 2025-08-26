@@ -22,12 +22,19 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Model Fit Summary", description="Basic statistics and evaluation metrics from model fitting.")
 class BERTopicNode:
     """Use BERTopic to extract topics from documents."""
-    
+    '''
     text_column = knext.ColumnParameter(
         "Text Column",
         "Column containing input documents.",
         column_filter=kutil.is_string
     )
+    '''
+    
+    document_column_param = knext.ColumnParameter(
+        label="Document column", 
+        description="Documents from which topics should be extracted", 
+        port_index=0, 
+        column_filter=kutil.is_string)
 
     embedding_method = knext.StringParameter(
         label="Embedding Method",
@@ -102,9 +109,13 @@ class BERTopicNode:
     def execute(self, exec_context, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
-        
+
         # Get documents
-        documents = df[self.text_column].dropna().astype(str).tolist()
+        documents = df[self.document_column_param].to_list()
+        topic_model = BERTopic(language=self.language_param, calculate_probabilities=self.probabilities_param, nr_topics=20)
+        topics, probs = topic_model.fit_transform(documents)
+        df['Topics'] = topics
+
         
         if not documents:
             raise ValueError("No valid documents found.")
@@ -157,13 +168,15 @@ class BERTopicNode:
             bertopic_params['nr_topics'] = self.nr_topics_param
         
         # Create and fit BERTopic model
-        topic_model = BERTopic(**bertopic_params)
-        topics, probabilities = topic_model.fit_transform(documents)
+        topic_model = BERTopic(language=self.language_param, calculate_probabilities=self.probabilities_param, nr_topics=20)
+        topics, probs = topic_model.fit_transform(df[self.document_column_param].to_list())
+        df['Topic'] = topics
+
         
         # Prepare Output 1: Documents with topics
         df = df.copy()  # Avoid modifying the original dataframe
         df['Topic'] = -1  # Default for all rows
-        valid_indices = df[self.text_column].dropna().index
+        valid_indices = df[self.document_column_param].dropna().index
         df.loc[valid_indices, 'Topic'] = pd.Series(topics, dtype='int32').values
         output1 = knext.Table.from_pandas(df)
         
