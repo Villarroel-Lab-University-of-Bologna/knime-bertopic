@@ -102,11 +102,20 @@ class BERTopicNode:
         # Convert to pandas
         df = input_table.to_pandas()
 
-        # Get documents
-        documents = df[self.document_column_param].to_list()
+        # Get documents and clean them
+        documents_series = df[self.document_column_param]
         
-        if not documents:
-            raise ValueError("No valid documents found.")
+        # Remove NaN values and convert to string
+        documents_clean = documents_series.dropna().astype(str).tolist()
+        
+        # Filter out empty strings and very short documents
+        documents_clean = [doc.strip() for doc in documents_clean if doc.strip() and len(doc.strip()) > 3]
+        
+        if not documents_clean:
+            raise ValueError("No valid documents found after cleaning. Check for empty or null values in the document column.")
+        
+        # Log information about data cleaning
+        LOGGER.info(f"Original documents: {len(documents_series)}, Valid documents after cleaning: {len(documents_clean)}")
         
         # Set up embedding model
         embedding_model = None
@@ -149,6 +158,7 @@ class BERTopicNode:
             if self.clustering_method == "HDBSCAN":
                 bertopic_params['hdbscan_model'] = cluster_model
             else:  # KMeans
+                # Note: For KMeans, you should use the cluster_model parameter, not hdbscan_model
                 bertopic_params['hdbscan_model'] = cluster_model
         
         # Set number of topics for automatic reduction (only for HDBSCAN)
@@ -157,16 +167,25 @@ class BERTopicNode:
         
         # Create and fit BERTopic model
         topic_model = BERTopic(**bertopic_params)
-        topics, probs = topic_model.fit_transform(df[self.document_column_param].to_list())
-        df['Topic'] = topics
-
+        topics, probs = topic_model.fit_transform(documents_clean)
         
         # Prepare Output 1: Documents with topics
-        df = df.copy()  # Avoid modifying the original dataframe
-        df['Topic'] = -1  # Default for all rows
-        valid_indices = df[self.document_column_param].dropna().index
-        df.loc[valid_indices, 'Topic'] = pd.Series(topics, dtype='int32').values
-        output1 = knext.Table.from_pandas(df)
+        df_output = df.copy()
+        df_output['Topic'] = -1  # Default for all rows (outliers)
+        
+        # Map topics back to original dataframe
+        valid_indices = documents_series.dropna().index
+        clean_doc_index = 0
+        for idx in valid_indices:
+            if (documents_series.loc[idx] is not None and 
+                str(documents_series.loc[idx]).strip() and 
+                len(str(documents_series.loc[idx]).strip()) > 3):
+                if clean_doc_index < len(topics):
+                    df_output.loc[idx, 'Topic'] = topics[clean_doc_index]
+                    clean_doc_index += 1
+        
+        df_output['Topic'] = df_output['Topic'].astype('int32')
+        output1 = knext.Table.from_pandas(df_output)
         
         # Prepare Output 2: Topic-word probabilities
         topic_words_data = []
@@ -191,7 +210,8 @@ class BERTopicNode:
         # Prepare Output 3: Model summary
         summary_data = [
             ['Number of Topics', str(len(all_topics))],
-            ['Number of Documents', str(len(documents))],
+            ['Number of Documents', str(len(documents_clean))],
+            ['Number of Original Documents', str(len(documents_series))],
             ['Number of Outliers', str(sum(1 for t in topics if t == -1))],
             ['Embedding Method', str(self.embedding_method)],
             ['Clustering Method', str(self.clustering_method)],
