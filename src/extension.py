@@ -15,19 +15,7 @@ LOGGER = logging.getLogger(__name__)
     name="Topic Extractor (BERTopic)", 
     node_type=knext.NodeType.LEARNER, 
     icon_path="icons/icon.png", 
-    category="/",
-    description="""
-    BERTopic implementation following the state-of-the-art pipeline: Embedding → UMAP → HDBSCAN.
-    
-    This node implements topic modeling using BERTopic with the complete pipeline as described in recent literature:
-    1. Document embedding generation using transformer models
-    2. Dimensionality reduction with UMAP for better clustering performance
-    3. Density-based clustering with HDBSCAN for automatic topic discovery
-    4. Topic representation with c-TF-IDF and optional Maximal Marginal Relevance (MMR)
-    
-    The implementation supports automatic topic number determination and includes coherence optimization
-    through MMR for improved topic quality and diversity.
-    """)
+    category="/")
 
 @knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
@@ -36,11 +24,7 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
 class BERTopicNode:
     """
-    Advanced BERTopic implementation for topic extraction from documents.
-    
-    Implements the complete BERTopic pipeline: Embedding → UMAP → HDBSCAN → c-TF-IDF,
-    with support for automatic topic discovery, coherence optimization, and comprehensive
-    topic analysis following recent advances in neural topic modeling.
+    A KNIME node that performs topic modeling using the BERTopic library. It allows users to configure various parameters for embedding generation, dimensionality reduction, clustering, and topic representation
     """
     
     text_column = knext.ColumnParameter(
@@ -52,7 +36,7 @@ class BERTopicNode:
     # Embedding Configuration
     embedding_method = knext.StringParameter(
         label="Embedding Method",
-        description="Method for generating document embeddings. SentenceTransformers recommended for optimal performance.",
+        description="Method for generating document embeddings.",
         default_value="SentenceTransformers",
         enum=["SentenceTransformers", "TF-IDF"],
         is_advanced=False
