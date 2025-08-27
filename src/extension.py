@@ -20,11 +20,10 @@ LOGGER = logging.getLogger(__name__)
 @knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
-@knext.output_table(name="Model Fit Summary", description="Comprehensive statistics and evaluation metrics from model fitting.")
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
 class BERTopicNode:
     """
-    A KNIME node that performs topic modeling using the BERTopic library. It allows users to configure various parameters for embedding generation, dimensionality reduction, clustering, and topic representation
+    A KNIME node that performs topic modeling using the BERTopic library.
     """
     
     text_column = knext.ColumnParameter(
@@ -148,7 +147,7 @@ class BERTopicNode:
     # General Configuration
     language_param = knext.StringParameter(
         label="Language",
-        description="Language for stopword removal and preprocessing.",
+        description="Language for BERTopic internal processing",
         default_value="english",
         enum=["english", "multilingual", "german", "french", "spanish", "italian"],
         is_advanced=False
@@ -194,15 +193,8 @@ class BERTopicNode:
             knext.Column(knext.int32(), "Word_Rank")
         ])
         
-        # Output 3: Comprehensive model summary
+        # Output 3: Topic information with statistics
         schema3 = knext.Schema.from_columns([
-            knext.Column(knext.string(), "Metric"),
-            knext.Column(knext.string(), "Value"),
-            knext.Column(knext.string(), "Description")
-        ])
-        
-        # Output 4: Topic information with statistics
-        schema4 = knext.Schema.from_columns([
             knext.Column(knext.int32(), "Topic_ID"),
             knext.Column(knext.int32(), "Topic_Size"),
             knext.Column(knext.double(), "Topic_Percentage"),
@@ -211,7 +203,7 @@ class BERTopicNode:
             knext.Column(knext.double(), "Coherence_Score")
         ])
         
-        return schema1, schema2, schema3, schema4
+        return schema1, schema2, schema3
 
     def execute(self, exec_context, input_table):
         # Convert to pandas
@@ -233,11 +225,9 @@ class BERTopicNode:
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         elif self.embedding_method == "TF-IDF":
-            # Enhanced TF-IDF with better parameters
-            stop_words = "english" if self.language_param == "english" else None
+            # Enhanced TF-IDF without stopwords (already removed in preprocessing)
             vectorizer_model = CountVectorizer(
                 ngram_range=(1, 2), 
-                stop_words=stop_words,
                 max_features=5000,
                 min_df=2,
                 max_df=0.95
@@ -259,7 +249,7 @@ class BERTopicNode:
         # Set up clustering model
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
-            min_samples = self.min_samples if self.min_samples else max(2, self.min_topic_size // 2)
+            min_samples = None if self.min_samples == 0 else self.min_samples
             cluster_model = hdbscan.HDBSCAN(
                 min_cluster_size=self.min_topic_size,
                 min_samples=min_samples,
@@ -267,7 +257,7 @@ class BERTopicNode:
                 cluster_selection_method='eom',
                 prediction_data=True
             )
-            LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}")
+            LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={min_samples or 'auto'}")
         elif self.clustering_method == "KMeans":
             n_clusters = self.nr_topics_param if self.nr_topics_param > 0 else 10
             cluster_model = KMeans(n_clusters=n_clusters, random_state=self.random_state)
@@ -362,37 +352,7 @@ class BERTopicNode:
             })
         output2 = knext.Table.from_pandas(topic_words_df)
         
-        # Prepare Output 3: Comprehensive model summary
-        topic_info = topic_model.get_topic_info()
-        num_outliers = sum(1 for t in topics if t == -1)
-        
-        summary_data = [
-            ['Total Topics', str(len(all_topics)), 'Number of discovered topics (excluding outliers)'],
-            ['Documents Processed', str(len(documents)), 'Total number of input documents'],
-            ['Outlier Documents', str(num_outliers), 'Documents not assigned to any topic'],
-            ['Outlier Percentage', f"{(num_outliers/len(documents)*100):.1f}%", 'Percentage of documents classified as outliers'],
-            ['Embedding Method', str(self.embedding_method), 'Method used for document embeddings'],
-            ['Transformer Model', str(self.sentence_transformer_model), 'Specific model used for embeddings'],
-            ['UMAP Enabled', str(self.use_umap), 'Whether UMAP dimensionality reduction was applied'],
-            ['UMAP Components', str(self.umap_n_components) if self.use_umap else 'N/A', 'Number of UMAP dimensions'],
-            ['Clustering Method', str(self.clustering_method), 'Algorithm used for topic clustering'],
-            ['Min Topic Size', str(self.min_topic_size), 'Minimum documents required per topic'],
-            ['MMR Enabled', str(self.use_mmr), 'Whether Maximal Marginal Relevance was used'],
-            ['MMR Diversity', str(self.mmr_diversity) if self.use_mmr else 'N/A', 'MMR diversity parameter'],
-            ['Language', str(self.language_param), 'Language setting for preprocessing'],
-            ['Auto Topic Selection', str(self.auto_topic_selection), 'Whether automatic topic number selection was used'],
-            ['Probabilities Calculated', str(self.calculate_probabilities), 'Whether soft topic probabilities were computed']
-        ]
-        
-        summary_df = pd.DataFrame(summary_data, columns=['Metric', 'Value', 'Description'])
-        summary_df = summary_df.astype({
-            'Metric': 'string',
-            'Value': 'string', 
-            'Description': 'string'
-        })
-        output3 = knext.Table.from_pandas(summary_df)
-        
-        # Prepare Output 4: Detailed topic information
+        # Prepare Output 3: Detailed topic information
         topic_details_data = []
         
         for topic_id in all_topics.keys():
@@ -434,9 +394,9 @@ class BERTopicNode:
                 'Representative_Document': 'string',
                 'Coherence_Score': 'float64'
             })
-        output4 = knext.Table.from_pandas(topic_details_df)
+        output3 = knext.Table.from_pandas(topic_details_df)
         
         LOGGER.info("BERTopic node execution completed successfully")
         
         # Return all outputs
-        return output1, output2, output3, output4
+        return output1, output2, output3
