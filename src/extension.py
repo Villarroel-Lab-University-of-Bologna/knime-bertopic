@@ -106,7 +106,7 @@ class BERTopicNode:
     min_samples = knext.IntParameter(
         label="HDBSCAN Min Samples",
         description="Minimum samples for HDBSCAN core points. Higher values create more conservative clusters.",
-        default_value=None,
+        default_value=1,
         min_value=1,
         is_advanced=True
     )
