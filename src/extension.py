@@ -23,63 +23,48 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
 class BERTopicNode:
     """
-
     Topic Extractor (BERTopic) node
 
-    The Topic Extractor (BERTopic) node enables users to perform advanced topic modeling on text documents using the state-of-the-art BERTopic library. It automatically discovers latent topics within a collection of documents by leveraging modern transformer-based embeddings, dimensionality reduction, and clustering techniques.
+    The Topic Extractor (BERTopic) node enables users to perform advanced topic modeling on text documents using the state-of-the-art BERTopic library. It automatically discovers coherent topics within document collections by leveraging modern transformer-based embeddings, dimensionality reduction, and clustering techniques to preserve semantic relationships that traditional methods miss.
 
-    The model processes text data by converting documents into high-dimensional embeddings, reducing dimensionality through UMAP, and applying clustering algorithms to group semantically similar documents. Users can choose from multiple embedding methods, clustering approaches, and topic representation strategies.
+    The model processes text data through a validated three-stage pipeline: document embedding using pre-trained transformers, UMAP dimensionality reduction for clustering optimization, and HDBSCAN density-based clustering for automatic topic discovery. This approach significantly outperforms traditional methods, with research by Huang et al. (2024) demonstrating superior performance in capturing semantic meaning from short texts like online reviews compared to conventional LDA approaches.
 
-    Training parameters such as minimum topic size, UMAP components, and clustering methods can be customized. The node outputs three comprehensive tables: document-topic assignments with probabilities, detailed word-topic distributions, and complete topic information including statistics and representative terms.
+    Training parameters such as embedding models, UMAP components, and clustering methods can be customized. The node features automatic topic number determination and incorporates Maximal Marginal Relevance (MMR) optimization to balance topic coherence with word diversity. The node outputs three comprehensive tables: document-topic assignments with probabilities, detailed word-topic distributions with coherence metrics, and complete topic information including statistics and representative terms.
 
-    The node implements a three-stage processing pipeline based on recent advances in topic modeling research [Zheng et al., 2024]:
+    The node implements a validated processing pipeline based on recent advances in topic modeling research:
 
-    -**Document Embedding**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
+    -**Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
     [More info](https://www.sbert.net/)
     
-    -**UMAP Dimensionality Reduction**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
+    -**UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
     [More info](https://umap-learn.readthedocs.io/)
     
-    -**HDBSCAN Clustering**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
+    -**HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
     [More info](https://hdbscan.readthedocs.io/)
 
     -**c-TF-IDF Topic Representation**: Enhanced term frequency-inverse document frequency approach that treats each topic cluster as a single document, improving topic coherence and interpretability compared to traditional TF-IDF methods.
 
     ### Configuration Options:
-    
     -**Text Column**: Select the column containing text documents for topic modeling.
-
     -**Embedding Method**: Choose between SentenceTransformers (recommended) or TF-IDF for document representation.
-
     -**Sentence Transformer Model**: Select from pre-trained models like all-MiniLM-L6-v2 (fast) or all-mpnet-base-v2 (best quality).
-
     -**Use UMAP**: Enable dimensionality reduction for improved clustering performance and computational efficiency.
-
     -**UMAP Components**: Number of dimensions for reduction (balances performance vs. information retention).
-
     -**Clustering Method**: Choose between HDBSCAN (automatic topic discovery) or KMeans (fixed number of topics).
-
-    -**Automatic Topic Selection**: Enable automatic determination of optimal topic count based on clustering results and coherence metrics.
-
+    -**Automatic Topic Selection**: Enable automatic determination of optimal topic count based on clustering results and coherence analysis.
     -**Minimum Topic Size**: Sets the minimum number of documents required to form a topic (affects granularity).
-
     -**Use MMR**: Enable Maximal Marginal Relevance for topic representation optimization.
-
-    -**MMR Diversity**: Controls the coherence-diversity trade-off in topic word selection (higher values increase diversity while maintaining semantic coherence).
-
+    -**MMR Diversity**: Controls the coherence-diversity trade-off in topic word selection, balancing relevance with semantic diversity for improved topic interpretability.
     -**Calculate Probabilities**: Generate soft clustering probabilities for document-topic assignments (increases computation time but provides uncertainty estimates).
 
     ### How It Works:
-
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
+    2. **Dimensionality Reduction**: UMAP reduces the high-dimensional embeddings to a lower-dimensional space while preserving semantic structure and relationships between documents.
+    3. **Density-Based Clustering**: HDBSCAN analyzes the reduced embeddings to identify dense regions representing coherent topics, automatically determining optimal cluster numbers without manual specification.
+    4. **Topic Representation**: c-TF-IDF generates topic representations by treating each cluster as a single document, with optional MMR optimization to balance word relevance and diversity for improved coherence and interpretability.
+    5. **Output Generation**: Three comprehensive tables are produced containing document-topic assignments, detailed word-topic probabilities with coherence scores, and topic metadata including statistical summaries and representative documents.
 
-    2. **Dimensionality Reduction**: If UMAP is enabled, the high-dimensional embeddings are reduced to a lower-dimensional space while preserving semantic structure and relationships.
-
-    3. **Density-Based Clustering**: HDBSCAN analyzes the (optionally reduced) embeddings to identify dense regions representing coherent topics, automatically determining optimal cluster numbers.
-
-    4. **Topic Representation**: c-TF-IDF generates topic representations by treating each cluster as a single document, with optional MMR optimization to balance word relevance and diversity for improved coherence.
-
-    5. **Output Generation**: Three comprehensive tables are produced containing document-topic assignments, detailed word-topic probabilities, and topic metadata including coherence scores and statistical summaries.
+    Research by Huang et al. (2024) validates this integrated pipeline's effectiveness in extracting coherent topics from domain-specific text collections, demonstrating superior performance in capturing fine-grained semantic aspects that traditional topic modeling approaches often miss.
 
     """
     
