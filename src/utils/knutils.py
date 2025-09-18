@@ -1,8 +1,6 @@
 import knime.extension as knext
 import logging
-import pickle
-from sklearn.preprocessing import LabelEncoder
-import pandas as pd
+
 
 LOGGER = logging.getLogger(__name__)
 
