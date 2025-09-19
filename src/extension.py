@@ -46,24 +46,39 @@ class BERTopicNode:
 
     ### Configuration Options:
     -**Text Column**: Select the column containing text documents for topic modeling.
+
     -**Embedding Method**: Choose between SentenceTransformers (recommended) or TF-IDF for document representation.
+
     -**Sentence Transformer Model**: Select from pre-trained models like all-MiniLM-L6-v2 (fast) or all-mpnet-base-v2 (best quality).
+
     -**Use UMAP**: Enable dimensionality reduction for improved clustering performance and computational efficiency.
+
     -**UMAP Components**: Number of dimensions for reduction (balances performance vs. information retention).
+
     -**Clustering Method**: Choose between HDBSCAN (automatic topic discovery) or KMeans (fixed number of topics).
+
     -**Automatic Topic Selection**: Enable automatic determination of optimal topic count based on clustering results and coherence analysis.
+
     -**Minimum Topic Size**: Sets the minimum number of documents required to form a topic (affects granularity).
+
     -**Use MMR**: Enable Maximal Marginal Relevance for topic representation optimization.
+
     -**MMR Diversity**: Controls the coherence-diversity trade-off in topic word selection, balancing relevance with semantic diversity for improved topic interpretability.
+
     -**Calculate Probabilities**: Generate soft clustering probabilities for document-topic assignments (increases computation time but provides uncertainty estimates).
 
     ### How It Works:
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
+
     2. **Dimensionality Reduction**: UMAP reduces the high-dimensional embeddings to a lower-dimensional space while preserving semantic structure and relationships between documents.
+    
     3. **Density-Based Clustering**: HDBSCAN analyzes the reduced embeddings to identify dense regions representing coherent topics, automatically determining optimal cluster numbers without manual specification.
+    
     4. **Topic Representation**: c-TF-IDF generates topic representations by treating each cluster as a single document, with optional MMR optimization to balance word relevance and diversity for improved coherence and interpretability.
+    
     5. **Output Generation**: Three comprehensive tables are produced containing document-topic assignments, detailed word-topic probabilities with coherence scores, and topic metadata including statistical summaries and representative documents.
 
+    
     Research by Huang et al. (2024) validates this integrated pipeline's effectiveness in extracting coherent topics from domain-specific text collections, demonstrating superior performance in capturing fine-grained semantic aspects that traditional topic modeling approaches often miss.
 
     """
