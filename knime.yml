@@ -2,8 +2,8 @@
 # It is used to define the extension's metadata and configuration.
 
 # Extension metadata
-name: first_extension  # Will be concatenated with the group_id to an ID
-group_id: org.tutorial
+name: bertopic  # Will be concatenated with the group_id to an ID
+group_id: edu.unibo
 description: BERTopic extension # Human readable bundle name / description
 long_description: This extension is designed to use BERTopic.
 version: 0.1.0 # Version of this Python node extension
