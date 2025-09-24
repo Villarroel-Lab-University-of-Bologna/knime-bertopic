@@ -111,7 +111,7 @@ class BERTopicNode:
             "paraphrase-distilroberta-base-v1"
         ],
         is_advanced=True
-    ).rule(knext.OneOf(embedding_method, "SentenceTransformers"), knext.Effect.ENABLE)
+    ).rule(knext.OneOf(embedding_method, "SentenceTransformers"), knext.Effect.DISABLE)
 
     # UMAP configuration
     use_umap = knext.BoolParameter(
@@ -127,7 +127,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    )
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
@@ -136,7 +136,7 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    )
 
     umap_min_dist = knext.DoubleParameter(
         label="UMAP Min Distance",
@@ -145,7 +145,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    )
 
     # Clustering configuration
     clustering_method = knext.StringParameter(
