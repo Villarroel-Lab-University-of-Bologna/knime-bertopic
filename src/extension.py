@@ -148,15 +148,6 @@ class BERTopicNode:
         is_advanced=True
     )
 
-    nr_topics_param = knext.IntParameter(
-        label="Target Number of Topics",
-        description="Target number of topics (0 for automatic). Only used when auto selection is disabled or for KMeans.",
-        default_value=0,
-        min_value=0,
-        max_value=1000,
-        is_advanced=True
-    )
-
     # MMR configuration
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
