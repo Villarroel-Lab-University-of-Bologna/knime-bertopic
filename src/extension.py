@@ -111,15 +111,15 @@ class BERTopicNode:
             "paraphrase-distilroberta-base-v1"
         ],
         is_advanced=True
-    )
+    ).rule(knext.OneOf(embedding_method, "SentenceTransformers"), knext.Effect.ENABLE)
 
     # UMAP configuration
     use_umap = knext.BoolParameter(
         label="Use UMAP Dimensionality Reduction",
         description="Enable UMAP for dimensionality reduction before clustering (recommended for optimal results).",
-        default_value=True,
-        is_advanced=False
+        default_value=True
     )
+
     umap_n_components = knext.IntParameter(
         label="UMAP Components",
         description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
@@ -127,7 +127,8 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
         description="Number of neighbors for UMAP. Higher values preserve global structure, lower values preserve local structure.",
@@ -135,7 +136,8 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+
     umap_min_dist = knext.DoubleParameter(
         label="UMAP Min Distance",
         description="Minimum distance between points in UMAP embedding. Lower values create tighter clusters.",
@@ -143,7 +145,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
 
     # Clustering configuration
     clustering_method = knext.StringParameter(
@@ -153,6 +155,7 @@ class BERTopicNode:
         enum=["HDBSCAN", "KMeans"],
         is_advanced=False
     )
+
     min_topic_size = knext.IntParameter(
         label="Minimum Topic Size",
         description="Minimum number of documents required to form a topic. Affects topic granularity.",
@@ -161,6 +164,7 @@ class BERTopicNode:
         max_value=1000,
         is_advanced=False
     )
+
     min_samples = knext.IntParameter(
         label="HDBSCAN Min Samples",
         description="Minimum samples for HDBSCAN core points. Higher values create more conservative clusters.",
@@ -169,19 +173,13 @@ class BERTopicNode:
         is_advanced=True
     )
 
-    # Topic number configuration
-    auto_topic_selection = knext.BoolParameter(
-        label="Automatic Topic Selection",
-        description="Enable automatic determination of optimal number of topics based on clustering results.",
-        default_value=True,
-        is_advanced=False
-    )
     nr_topics_param = knext.IntParameter(
         label="Target Number of Topics",
         description="Target number of topics (0 for automatic). Only used when auto selection is disabled or for KMeans.",
         default_value=0,
         min_value=0,
-        max_value=1000
+        max_value=1000,
+        is_advanced=True
     )
 
     # MMR configuration
@@ -201,19 +199,13 @@ class BERTopicNode:
     )
 
     # General configuration
-    language_param = knext.StringParameter(
-        label="Language",
-        description="Language for BERTopic internal processing",
-        default_value="english",
-        enum=["english", "multilingual", "german", "french", "spanish", "italian"],
-        is_advanced=False
-    )
     calculate_probabilities = knext.BoolParameter(
         label="Calculate Topic Probabilities",
         description="Calculate soft clustering probabilities for documents (may increase computation time).",
         default_value=True,
         is_advanced=True
     )
+
     top_k_words = knext.IntParameter(
         label="Top K Words per Topic",
         description="Number of most representative words to extract per topic.",
@@ -222,6 +214,7 @@ class BERTopicNode:
         max_value=50,
         is_advanced=True
     )
+
     random_state = knext.IntParameter(
         label="Random State",
         description="Random seed for reproducible results.",
