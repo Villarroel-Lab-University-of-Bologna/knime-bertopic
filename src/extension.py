@@ -42,31 +42,6 @@ class BERTopicNode:
     -**HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
     [More info](https://hdbscan.readthedocs.io/)
 
-    -**c-TF-IDF Topic Representation**: Enhanced term frequency-inverse document frequency approach that treats each topic cluster as a single document, improving topic coherence and interpretability compared to traditional TF-IDF methods.
-
-    ### Configuration Options:
-    -**Text Column**: Select the column containing text documents for topic modeling.
-
-    -**Embedding Method**: Choose between SentenceTransformers (recommended) or TF-IDF for document representation.
-
-    -**Sentence Transformer Model**: Select from pre-trained models like all-MiniLM-L6-v2 (fast) or all-mpnet-base-v2 (best quality).
-
-    -**Use UMAP**: Enable dimensionality reduction for improved clustering performance and computational efficiency.
-
-    -**UMAP Components**: Number of dimensions for reduction (balances performance vs. information retention).
-
-    -**Clustering Method**: Choose between HDBSCAN (automatic topic discovery) or KMeans (fixed number of topics).
-
-    -**Automatic Topic Selection**: Enable automatic determination of optimal topic count based on clustering results and coherence analysis.
-
-    -**Minimum Topic Size**: Sets the minimum number of documents required to form a topic (affects granularity).
-
-    -**Use MMR**: Enable Maximal Marginal Relevance for topic representation optimization.
-
-    -**MMR Diversity**: Controls the coherence-diversity trade-off in topic word selection, balancing relevance with semantic diversity for improved topic interpretability.
-
-    -**Calculate Probabilities**: Generate soft clustering probabilities for document-topic assignments (increases computation time but provides uncertainty estimates).
-
     ### How It Works:
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
 
@@ -111,7 +86,7 @@ class BERTopicNode:
             "paraphrase-distilroberta-base-v1"
         ],
         is_advanced=True
-    ).rule(knext.OneOf(embedding_method, "SentenceTransformers"), knext.Effect.ENABLE)
+    ).rule(knext.Contains(embedding_method, "SentenceTransformers"), knext.Effect.ENABLE)
 
     # UMAP configuration
     use_umap = knext.BoolParameter(
@@ -127,7 +102,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    ).rule(knext.Condition(use_umap, True), knext.Effect.ENABLE)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
@@ -136,7 +111,7 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    ).rule(knext.Condition(use_umap, True), knext.Effect.ENABLE)
 
     umap_min_dist = knext.DoubleParameter(
         label="UMAP Min Distance",
@@ -145,7 +120,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
+    ).rule(knext.Condition(use_umap, True), knext.Effect.ENABLE)
 
     # Clustering configuration
     clustering_method = knext.StringParameter(
