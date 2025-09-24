@@ -102,7 +102,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(embedding_method, [False]), knext.Effect.HIDE)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
