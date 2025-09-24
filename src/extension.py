@@ -86,7 +86,7 @@ class BERTopicNode:
             "paraphrase-distilroberta-base-v1"
         ],
         is_advanced=True
-    ).rule(knext.Condition(embedding_method, "TF-IDF"), knext.Effect.DISABLE)
+    ).rule(knext.Contains(embedding_method, "TF-IDF"), knext.Effect.DISABLE)
 
     # UMAP configuration
     use_umap = knext.BoolParameter(
