@@ -102,7 +102,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    ).rule(knext.OneOf(embedding_method, [False]), knext.Effect.HIDE)
+    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
@@ -111,7 +111,7 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     umap_min_dist = knext.DoubleParameter(
         label="UMAP Min Distance",
@@ -120,7 +120,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     # Clustering configuration
     clustering_method = knext.StringParameter(
@@ -146,7 +146,7 @@ class BERTopicNode:
         default_value=1,
         min_value=1,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
 
     # MMR configuration
     use_mmr = knext.BoolParameter(
@@ -155,6 +155,7 @@ class BERTopicNode:
         default_value=True,
         is_advanced=False
     )
+    
     mmr_diversity = knext.DoubleParameter(
         label="MMR Diversity",
         description="Controls diversity vs relevance trade-off. Higher values increase diversity of topic terms.",
@@ -162,7 +163,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    )
+    ).rule(knext.OneOf(use_mmr, [False]), knext.Effect.HIDE)
 
     # General configuration
     calculate_probabilities = knext.BoolParameter(
