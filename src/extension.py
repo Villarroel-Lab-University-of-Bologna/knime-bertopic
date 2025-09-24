@@ -33,14 +33,39 @@ class BERTopicNode:
 
     The node implements a validated processing pipeline based on recent advances in topic modeling research:
 
-    - **Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
+    -**Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
     [More info](https://www.sbert.net/)
     
-    - **UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
+    -**UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
     [More info](https://umap-learn.readthedocs.io/)
     
-    - **HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
+    -**HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
     [More info](https://hdbscan.readthedocs.io/)
+
+    -**c-TF-IDF Topic Representation**: Enhanced term frequency-inverse document frequency approach that treats each topic cluster as a single document, improving topic coherence and interpretability compared to traditional TF-IDF methods.
+
+    ### Configuration Options:
+    -**Text Column**: Select the column containing text documents for topic modeling.
+
+    -**Embedding Method**: Choose between SentenceTransformers (recommended) or TF-IDF for document representation.
+
+    -**Sentence Transformer Model**: Select from pre-trained models like all-MiniLM-L6-v2 (fast) or all-mpnet-base-v2 (best quality).
+
+    -**Use UMAP**: Enable dimensionality reduction for improved clustering performance and computational efficiency.
+
+    -**UMAP Components**: Number of dimensions for reduction (balances performance vs. information retention).
+
+    -**Clustering Method**: Choose between HDBSCAN (automatic topic discovery) or KMeans (fixed number of topics).
+
+    -**Automatic Topic Selection**: Enable automatic determination of optimal topic count based on clustering results and coherence analysis.
+
+    -**Minimum Topic Size**: Sets the minimum number of documents required to form a topic (affects granularity).
+
+    -**Use MMR**: Enable Maximal Marginal Relevance for topic representation optimization.
+
+    -**MMR Diversity**: Controls the coherence-diversity trade-off in topic word selection, balancing relevance with semantic diversity for improved topic interpretability.
+
+    -**Calculate Probabilities**: Generate soft clustering probabilities for document-topic assignments (increases computation time but provides uncertainty estimates).
 
     ### How It Works:
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
@@ -86,7 +111,7 @@ class BERTopicNode:
             "paraphrase-distilroberta-base-v1"
         ],
         is_advanced=True
-    ).rule(knext.Contains(embedding_method, "TF-IDF"), knext.Effect.DISABLE)
+    ).rule(knext.OneOf(embedding_method, "SentenceTransformers"), knext.Effect.ENABLE)
 
     # UMAP configuration
     use_umap = knext.BoolParameter(
@@ -102,7 +127,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True
-    ).rule(knext.Condition(use_umap, False), knext.Effect.DISABLE)
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP Neighbors",
@@ -111,7 +136,7 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True
-    ).rule(knext.Condition(use_umap, False), knext.Effect.DISABLE)
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
 
     umap_min_dist = knext.DoubleParameter(
         label="UMAP Min Distance",
@@ -120,7 +145,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True
-    ).rule(knext.Condition(use_umap, False), knext.Effect.DISABLE)
+    ).rule(knext.OneOf(use_umap, True), knext.Effect.ENABLE)
 
     # Clustering configuration
     clustering_method = knext.StringParameter(
@@ -199,17 +224,13 @@ class BERTopicNode:
     )
 
     def configure(self, config_context, input_schema):
-        # Output 1: Documents with topic probabilities as columns
-        # Start with original schema
-        schema1 = input_schema
-        
-        # Add assigned topic and max probability columns
-        schema1 = schema1.append([
-            knext.Column(knext.int32(), "Assigned_Topic"),
-            knext.Column(knext.double(), "Max_Topic_Probability")
+        # Output 1: Documents with topics and probabilities
+        schema1 = input_schema.append([
+            knext.Column(knext.int32(), "Topic"),
+            knext.Column(knext.double(), "Topic_Probability")
         ])
-        
-        # Output 2: Topic-word probabilities (unchanged)
+
+        # Output 2: Topic-word probabilities
         schema2 = knext.Schema.from_columns([
             knext.Column(knext.int32(), "Topic_ID"),
             knext.Column(knext.string(), "Word"),
@@ -218,7 +239,7 @@ class BERTopicNode:
             knext.Column(knext.int32(), "Word_Rank")
         ])
 
-        # Output 3: Topic information (unchanged)
+        # Output 3: Topic information
         schema3 = knext.Schema.from_columns([
             knext.Column(knext.int32(), "Topic_ID"),
             knext.Column(knext.int32(), "Topic_Size"),
@@ -229,11 +250,17 @@ class BERTopicNode:
         ])
         return schema1, schema2, schema3
 
-
     def execute(self, exec_context, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
         original_df = df.copy()
+
+        # Guard against pre-existing columns that we add
+        for col in ("Topic", "Topic_Probability"):
+            if col in original_df.columns:
+                raise ValueError(
+                    f"Input table already has a '{col}' column; please rename or remove it before this node."
+                )
 
         # Get documents
         documents = original_df[self.text_column].dropna().astype(str).tolist()
@@ -297,6 +324,7 @@ class BERTopicNode:
 
         # Build BERTopic params
         bertopic_params = {
+            "language": self.language_param,
             "calculate_probabilities": self.calculate_probabilities,
             "min_topic_size": self.min_topic_size,
             "verbose": True
@@ -310,12 +338,13 @@ class BERTopicNode:
         if hdbscan_model is not None:
             bertopic_params["hdbscan_model"] = hdbscan_model
         if cluster_model is not None:
+            # BERTopic accepts arbitrary clustering models via cluster_model in recent versions
             bertopic_params["cluster_model"] = cluster_model
         if representation_model is not None:
             bertopic_params["representation_model"] = representation_model
 
-        # Handle nr_topics
-        if self.nr_topics_param > 0 and self.clustering_method == "HDBSCAN":
+        # Handle nr_topics (only meaningful for certain reductions / HDBSCAN pipelines)
+        if not self.auto_topic_selection and self.nr_topics_param > 0 and self.clustering_method == "HDBSCAN":
             bertopic_params["nr_topics"] = self.nr_topics_param
 
         # Fit
@@ -330,77 +359,37 @@ class BERTopicNode:
 
         LOGGER.info(f"Topic modeling completed. Found {len(set(topics))} topics.")
 
-        # Output 1: Documents with topic probabilities as columns
+        
+        # Output 1: Documents + topics
+        
         output_df = original_df.copy()
-        
-        # Add assigned topic and max probability
-        output_df["Assigned_Topic"] = -1
-        output_df["Max_Topic_Probability"] = 0.0
-        
-        # Get valid indices (documents that weren't NaN)
+        output_df["Topic"] = -1
+        output_df["Topic_Probability"] = 0.0
+
         valid_indices = original_df[self.text_column].dropna().index
-        
-        # Set assigned topics for valid documents
-        output_df.loc[valid_indices, "Assigned_Topic"] = pd.Series(topics, index=valid_indices, dtype="int32").values
-        
+        output_df.loc[valid_indices, "Topic"] = pd.Series(topics, index=valid_indices, dtype="int32").values
+
         if probabilities is not None:
-            # Get all unique topics (sorted for consistent column ordering)
-            all_topic_ids = sorted(set(topics))
-            
-            # Create probability columns for each topic
-            for topic_id in all_topic_ids:
-                col_name = f"Topic_{topic_id}_Probability"
-                output_df[col_name] = 0.0
-            
-            # Fill in probabilities for valid documents
-            for doc_idx, (orig_idx, topic_probs) in enumerate(zip(valid_indices, probabilities)):
-                # Get max probability for this document
-                max_prob = float(max(topic_probs)) if len(topic_probs) > 0 else 0.0
-                output_df.loc[orig_idx, "Max_Topic_Probability"] = max_prob
-                
-                # Set probability for each topic
-                for topic_id in all_topic_ids:
-                    col_name = f"Topic_{topic_id}_Probability"
-                    if topic_id < len(topic_probs):
-                        prob = float(topic_probs[topic_id])
-                    else:
-                        prob = 0.0
-                    output_df.loc[orig_idx, col_name] = prob
-        else:
-            # If probabilities not calculated, use hard assignments (1.0 for assigned topic, 0.0 for others)
-            all_topic_ids = sorted(set(topics))
-            
-            # Create probability columns for each topic
-            for topic_id in all_topic_ids:
-                col_name = f"Topic_{topic_id}_Probability"
-                output_df[col_name] = 0.0
-            
-            # Set probabilities based on hard assignments
-            for doc_idx, (orig_idx, assigned_topic) in enumerate(zip(valid_indices, topics)):
-                output_df.loc[orig_idx, "Max_Topic_Probability"] = 1.0
-                
-                for topic_id in all_topic_ids:
-                    col_name = f"Topic_{topic_id}_Probability"
-                    prob = 1.0 if topic_id == assigned_topic else 0.0
-                    output_df.loc[orig_idx, col_name] = prob
-        
-        # Ensure correct dtypes
-        output_df["Assigned_Topic"] = output_df["Assigned_Topic"].astype("int32", copy=False)
-        output_df["Max_Topic_Probability"] = output_df["Max_Topic_Probability"].astype("float64", copy=False)
-        
-        # Ensure topic probability columns are float64
-        topic_prob_cols = [col for col in output_df.columns if col.startswith("Topic_") and col.endswith("_Probability")]
-        for col in topic_prob_cols:
-            output_df[col] = output_df[col].astype("float64", copy=False)
+            # max probability per doc (probabilities is 2D array-like)
+            max_probs = [float(max(p)) if (p is not None and len(p) > 0) else 0.0 for p in probabilities]
+            output_df.loc[valid_indices, "Topic_Probability"] = pd.Series(max_probs, index=valid_indices, dtype="float64").values
+
+        # Enforce exact dtypes expected by configure()
+        output_df["Topic"] = output_df["Topic"].astype("int32", copy=False)
+        output_df["Topic_Probability"] = output_df["Topic_Probability"].astype("float64", copy=False)
 
         output1 = knext.Table.from_pandas(output_df)
 
-        # Output 2: Topic-word probabilities (unchanged)
+       
+        # Output 2: Topic-word probabilities
+        
         topic_words_data = []
-        all_topics = topic_model.get_topics()
+        all_topics = topic_model.get_topics()  # dict: topic -> List[(word, prob)]
 
         for topic_id, words in all_topics.items():
+            # words already sorted by prob desc
             for rank, (word, prob) in enumerate(words[: self.top_k_words], 1):
+                # Placeholder MMR score: keeping prob to maintain schema
                 mmr_score = float(prob)
                 topic_words_data.append({
                     "Topic_ID": int(topic_id),
@@ -413,7 +402,7 @@ class BERTopicNode:
         if topic_words_data:
             topic_words_df = pd.DataFrame(topic_words_data).astype({
                 "Topic_ID": "int32",
-                "Word": "object",
+                "Word": "object",          # use object for KNIME string
                 "Probability": "float64",
                 "MMR_Score": "float64",
                 "Word_Rank": "int32"
@@ -429,25 +418,30 @@ class BERTopicNode:
 
         output2 = knext.Table.from_pandas(topic_words_df)
 
-        # Output 3: Topic information (unchanged)
+        
+        # Output 3: Topic information
+        
         topic_details_data = []
         n_docs = len(documents)
 
         for topic_id in all_topics.keys():
             if topic_id == -1:
-                continue
+                continue  # skip outliers
 
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
 
+            # top words
             top_words_list = [w for (w, _) in all_topics[topic_id][:5]]
             top_words_str = ", ".join(top_words_list)
 
+            # representative document (first doc of this topic)
             topic_docs_idx = [i for i, t in enumerate(topics) if t == topic_id]
             representative_doc = documents[topic_docs_idx[0]] if topic_docs_idx else ""
             if len(representative_doc) > 200:
                 representative_doc = representative_doc[:200] + "..."
 
+            # simple coherence proxy: avg prob of top 5 words (bounded)
             if all_topics[topic_id]:
                 top5 = all_topics[topic_id][:5]
                 coherence_score = float(sum(prob for _, prob in top5) / max(1, len(top5)))
