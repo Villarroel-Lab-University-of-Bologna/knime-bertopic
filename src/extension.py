@@ -33,16 +33,14 @@ class BERTopicNode:
 
     The node implements a validated processing pipeline based on recent advances in topic modeling research:
 
-    -**Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
+    - **Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
     [More info](https://www.sbert.net/)
     
-    -**UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
+    - **UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
     [More info](https://umap-learn.readthedocs.io/)
     
-    -**HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
+    - **HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
     [More info](https://hdbscan.readthedocs.io/)
-
-    -**c-TF-IDF Topic Representation**: Enhanced term frequency-inverse document frequency approach that treats each topic cluster as a single document, improving topic coherence and interpretability compared to traditional TF-IDF methods.
 
     ### How It Works:
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
