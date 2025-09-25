@@ -58,24 +58,24 @@ class BERTopicNode:
 
     """
     
-
     # Input column
     text_column = knext.ColumnParameter(
-        "Text Column",
+        "Text column",
         "Column containing input documents for topic modeling.",
         column_filter=kutil.is_string
     )
 
-    # Embedding configuration
+    # === STAGE 1: DOCUMENT EMBEDDING ===
     embedding_method = knext.StringParameter(
-        label="Embedding Method",
+        label="Embedding method",
         description="Method for generating document embeddings.",
         default_value="SentenceTransformers",
         enum=["SentenceTransformers", "TF-IDF"],
         is_advanced=False
     )
+    
     sentence_transformer_model = knext.StringParameter(
-        label="Sentence Transformer Model",
+        label="Sentence transformer model",
         description="Pre-trained transformer model for document embeddings. all-mpnet-base-v2 provides best quality.",
         default_value="all-MiniLM-L6-v2",
         enum=[
@@ -88,15 +88,15 @@ class BERTopicNode:
         is_advanced=True
     ).rule(knext.OneOf(embedding_method, ["TF-IDF"]), knext.Effect.HIDE)
 
-    # UMAP configuration
+    # === STAGE 2: DIMENSIONALITY REDUCTION ===
     use_umap = knext.BoolParameter(
-        label="Use UMAP Dimensionality Reduction",
+        label="Use UMAP dimensionality reduction",
         description="Enable UMAP for dimensionality reduction before clustering (recommended for optimal results).",
         default_value=True
     )
 
     umap_n_components = knext.IntParameter(
-        label="UMAP Components",
+        label="UMAP components",
         description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
         default_value=5,
         min_value=2,
@@ -105,7 +105,7 @@ class BERTopicNode:
     ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     umap_n_neighbors = knext.IntParameter(
-        label="UMAP Neighbors",
+        label="UMAP neighbors",
         description="Number of neighbors for UMAP. Higher values preserve global structure, lower values preserve local structure.",
         default_value=15,
         min_value=2,
@@ -114,7 +114,7 @@ class BERTopicNode:
     ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     umap_min_dist = knext.DoubleParameter(
-        label="UMAP Min Distance",
+        label="UMAP min distance",
         description="Minimum distance between points in UMAP embedding. Lower values create tighter clusters.",
         default_value=0.0,
         min_value=0.0,
@@ -122,9 +122,9 @@ class BERTopicNode:
         is_advanced=True
     ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
-    # Clustering configuration
+    # === STAGE 3: CLUSTERING ===
     clustering_method = knext.StringParameter(
-        label="Clustering Method",
+        label="Clustering method",
         description="Clustering algorithm. HDBSCAN recommended for automatic topic discovery.",
         default_value="HDBSCAN",
         enum=["HDBSCAN", "KMeans"],
@@ -132,7 +132,7 @@ class BERTopicNode:
     )
 
     min_topic_size = knext.IntParameter(
-        label="Minimum Topic Size",
+        label="Minimum topic size",
         description="Minimum number of documents required to form a topic. Affects topic granularity.",
         default_value=10,
         min_value=2,
@@ -141,14 +141,23 @@ class BERTopicNode:
     )
 
     min_samples = knext.IntParameter(
-        label="HDBSCAN Min Samples",
+        label="HDBSCAN min samples",
         description="Minimum samples for HDBSCAN core points. Higher values create more conservative clusters.",
         default_value=1,
         min_value=1,
         is_advanced=True
+    ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
+
+    n_clusters = knext.IntParameter(
+        label="Number of clusters (K-Means)",
+        description="Number of clusters for K-Means clustering.",
+        default_value=10,
+        min_value=2,
+        max_value=100,
+        is_advanced=False
     ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
 
-    # MMR configuration
+    # === TOPIC REPRESENTATION ===
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
         description="Enable MMR for topic representation to balance relevance and diversity of topic terms.",
@@ -157,7 +166,7 @@ class BERTopicNode:
     )
     
     mmr_diversity = knext.DoubleParameter(
-        label="MMR Diversity",
+        label="MMR diversity",
         description="Controls diversity vs relevance trade-off. Higher values increase diversity of topic terms.",
         default_value=0.3,
         min_value=0.0,
@@ -165,16 +174,16 @@ class BERTopicNode:
         is_advanced=True
     ).rule(knext.OneOf(use_mmr, [False]), knext.Effect.HIDE)
 
-    # General configuration
+    # === GENERAL CONFIGURATION ===
     calculate_probabilities = knext.BoolParameter(
-        label="Calculate Topic Probabilities",
-        description="Calculate soft clustering probabilities for documents (may increase computation time).",
+        label="Calculate topic probabilities",
+        description="Calculate soft clustering probabilities for documents.",
         default_value=True,
         is_advanced=True
     )
 
     top_k_words = knext.IntParameter(
-        label="Top K Words per Topic",
+        label="Top K words per topic",
         description="Number of most representative words to extract per topic.",
         default_value=10,
         min_value=5,
@@ -183,7 +192,7 @@ class BERTopicNode:
     )
 
     random_state = knext.IntParameter(
-        label="Random State",
+        label="Random state",
         description="Random seed for reproducible results.",
         default_value=42,
         min_value=0,
@@ -191,24 +200,36 @@ class BERTopicNode:
     )
 
     def configure(self, config_context, input_schema):
-        # Output 1: Documents with topics and probabilities
+        # Validate that text column is selected
+        if self.text_column is None:
+            raise knext.InvalidParametersError("Please select a text column for topic modeling.")
+        
+        # Output 1: Documents with topics and probabilities 
+        # will be added dynamically at execution time since we don't know the number of topics yet
         schema1 = input_schema.append([
-            knext.Column(knext.int32(), "Topic"),
-            knext.Column(knext.double(), "Topic_Probability")
+            knext.Column(knext.string(), "Topic")
         ])
 
         # Output 2: Topic-word probabilities
-        schema2 = knext.Schema.from_columns([
-            knext.Column(knext.int32(), "Topic_ID"),
-            knext.Column(knext.string(), "Word"),
-            knext.Column(knext.double(), "Probability"),
-            knext.Column(knext.double(), "MMR_Score"),
-            knext.Column(knext.int32(), "Word_Rank")
-        ])
+        if self.use_mmr:
+            schema2 = knext.Schema.from_columns([
+                knext.Column(knext.string(), "Topic_ID"),
+                knext.Column(knext.string(), "Word"),
+                knext.Column(knext.double(), "Probability"),
+                knext.Column(knext.double(), "MMR_Score"),
+                knext.Column(knext.int32(), "Word_Rank")
+            ])
+        else:
+            schema2 = knext.Schema.from_columns([
+                knext.Column(knext.string(), "Topic_ID"),
+                knext.Column(knext.string(), "Word"),
+                knext.Column(knext.double(), "Probability"),
+                knext.Column(knext.int32(), "Word_Rank")
+            ])
 
         # Output 3: Topic information
         schema3 = knext.Schema.from_columns([
-            knext.Column(knext.int32(), "Topic_ID"),
+            knext.Column(knext.string(), "Topic_ID"),
             knext.Column(knext.int32(), "Topic_Size"),
             knext.Column(knext.double(), "Topic_Percentage"),
             knext.Column(knext.string(), "Top_Words"),
@@ -222,8 +243,12 @@ class BERTopicNode:
         df = input_table.to_pandas()
         original_df = df.copy()
 
+        # Validate text column selection
+        if self.text_column is None:
+            raise ValueError("No text column selected. Please configure the node and select a text column.")
+
         # Guard against pre-existing columns that we add
-        for col in ("Topic", "Topic_Probability"):
+        for col in ("Topic"):
             if col in original_df.columns:
                 raise ValueError(
                     f"Input table already has a '{col}' column; please rename or remove it before this node."
@@ -268,7 +293,7 @@ class BERTopicNode:
         hdbscan_model = None
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
-            ms = None if self.min_samples == 0 else self.min_samples
+            ms = None if self.min_samples == 1 else self.min_samples
             hdbscan_model = hdbscan.HDBSCAN(
                 min_cluster_size=self.min_topic_size,
                 min_samples=ms,
@@ -278,9 +303,8 @@ class BERTopicNode:
             )
             LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={ms or 'auto'}")
         else:  # KMeans
-            n_clusters = self.nr_topics_param if self.nr_topics_param > 0 else 10
-            cluster_model = KMeans(n_clusters=n_clusters, random_state=self.random_state)
-            LOGGER.info(f"KMeans configured with {n_clusters} clusters")
+            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
+            LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
 
         # Representation (MMR)
         representation_model = None
@@ -291,7 +315,6 @@ class BERTopicNode:
 
         # Build BERTopic params
         bertopic_params = {
-            "language": self.language_param,
             "calculate_probabilities": self.calculate_probabilities,
             "min_topic_size": self.min_topic_size,
             "verbose": True
@@ -305,14 +328,9 @@ class BERTopicNode:
         if hdbscan_model is not None:
             bertopic_params["hdbscan_model"] = hdbscan_model
         if cluster_model is not None:
-            # BERTopic accepts arbitrary clustering models via cluster_model in recent versions
-            bertopic_params["cluster_model"] = cluster_model
+            bertopic_params["hdbscan_model"] = cluster_model
         if representation_model is not None:
             bertopic_params["representation_model"] = representation_model
-
-        # Handle nr_topics (only meaningful for certain reductions / HDBSCAN pipelines)
-        if not self.auto_topic_selection and self.nr_topics_param > 0 and self.clustering_method == "HDBSCAN":
-            bertopic_params["nr_topics"] = self.nr_topics_param
 
         # Fit
         LOGGER.info("Fitting BERTopic model...")
@@ -324,26 +342,47 @@ class BERTopicNode:
             topics = topic_model.fit_transform(documents)
             probabilities = None
 
-        LOGGER.info(f"Topic modeling completed. Found {len(set(topics))} topics.")
+        # Convert topics list to proper format for counting
+        unique_topics = set(topics) if topics is not None else set()
+        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics.")
 
         
         # Output 1: Documents + topics
-        
         output_df = original_df.copy()
-        output_df["Topic"] = -1
-        output_df["Topic_Probability"] = 0.0
+        output_df["Topic"] = "-1"  # Default to outlier topic as string
 
         valid_indices = original_df[self.text_column].dropna().index
-        output_df.loc[valid_indices, "Topic"] = pd.Series(topics, index=valid_indices, dtype="int32").values
+        # Convert topics to strings
+        topics_str = [str(t) for t in topics]
+        output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
 
+        # Handle probabilities
         if probabilities is not None:
-            # max probability per doc (probabilities is 2D array-like)
-            max_probs = [float(max(p)) if (p is not None and len(p) > 0) else 0.0 for p in probabilities]
-            output_df.loc[valid_indices, "Topic_Probability"] = pd.Series(max_probs, index=valid_indices, dtype="float64").values
+                # Get all unique topics (excluding outliers for probability columns)
+                unique_topics = sorted([t for t in set(topics) if t != -1])
+                LOGGER.info(f"Creating probability columns for topics: {unique_topics}")
+                
+                # Add a column for each topic's probability
+                for topic_id in unique_topics:
+                    col_name = f"Topic_{topic_id}_Probability"
+                    output_df[col_name] = 0.0
+                
+                # Fill in probabilities for each document
+                for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
+                    if prob_list is not None and len(prob_list) > 0:
+                        # Set individual topic probabilities
+                        for topic_id in unique_topics:
+                            if topic_id < len(prob_list):
+                                col_name = f"Topic_{topic_id}_Probability"
+                                output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
+                
+                # Ensure proper dtypes for topic probability columns
+                for topic_id in unique_topics:
+                    col_name = f"Topic_{topic_id}_Probability"
+                    output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
-        # Enforce exact dtypes expected by configure()
-        output_df["Topic"] = output_df["Topic"].astype("int32", copy=False)
-        output_df["Topic_Probability"] = output_df["Topic_Probability"].astype("float64", copy=False)
+        # Enforce exact dtypes for main columns
+        output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
 
         output1 = knext.Table.from_pandas(output_df)
 
@@ -356,32 +395,40 @@ class BERTopicNode:
         for topic_id, words in all_topics.items():
             # words already sorted by prob desc
             for rank, (word, prob) in enumerate(words[: self.top_k_words], 1):
-                # Placeholder MMR score: keeping prob to maintain schema
-                mmr_score = float(prob)
-                topic_words_data.append({
-                    "Topic_ID": int(topic_id),
+                row_data = {
+                    "Topic_ID": str(topic_id),
                     "Word": str(word),
                     "Probability": float(prob),
-                    "MMR_Score": mmr_score,
                     "Word_Rank": int(rank)
-                })
+                }
+                
+                # Only include MMR score if MMR is enabled
+                if self.use_mmr:
+                    # Use prob as placeholder MMR score
+                    row_data["MMR_Score"] = float(prob)
+                
+                topic_words_data.append(row_data)
 
         if topic_words_data:
-            topic_words_df = pd.DataFrame(topic_words_data).astype({
-                "Topic_ID": "int32",
-                "Word": "object",          # use object for KNIME string
-                "Probability": "float64",
-                "MMR_Score": "float64",
-                "Word_Rank": "int32"
-            })
+            topic_words_df = pd.DataFrame(topic_words_data)
+            # Ensure proper dtypes
+            topic_words_df["Topic_ID"] = topic_words_df["Topic_ID"].astype("object")
+            topic_words_df["Word"] = topic_words_df["Word"].astype("object")
+            topic_words_df["Probability"] = topic_words_df["Probability"].astype("float64")
+            topic_words_df["Word_Rank"] = topic_words_df["Word_Rank"].astype("int32")
+            if self.use_mmr:
+                topic_words_df["MMR_Score"] = topic_words_df["MMR_Score"].astype("float64")
         else:
-            topic_words_df = pd.DataFrame({
-                "Topic_ID": pd.Series(dtype="int32"),
+            # Empty fallback
+            columns_dict = {
+                "Topic_ID": pd.Series(dtype="object"),
                 "Word": pd.Series(dtype="object"),
                 "Probability": pd.Series(dtype="float64"),
-                "MMR_Score": pd.Series(dtype="float64"),
                 "Word_Rank": pd.Series(dtype="int32"),
-            })
+            }
+            if self.use_mmr:
+                columns_dict["MMR_Score"] = pd.Series(dtype="float64")
+            topic_words_df = pd.DataFrame(columns_dict)
 
         output2 = knext.Table.from_pandas(topic_words_df)
 
@@ -416,7 +463,7 @@ class BERTopicNode:
                 coherence_score = 0.0
 
             topic_details_data.append({
-                "Topic_ID": int(topic_id),
+                "Topic_ID": str(topic_id),
                 "Topic_Size": int(topic_size),
                 "Topic_Percentage": float(topic_percentage),
                 "Top_Words": str(top_words_str),
@@ -426,7 +473,7 @@ class BERTopicNode:
 
         if topic_details_data:
             topic_details_df = pd.DataFrame(topic_details_data).astype({
-                "Topic_ID": "int32",
+                "Topic_ID": "object",
                 "Topic_Size": "int32",
                 "Topic_Percentage": "float64",
                 "Top_Words": "object",
@@ -435,7 +482,7 @@ class BERTopicNode:
             })
         else:
             topic_details_df = pd.DataFrame({
-                "Topic_ID": pd.Series(dtype="int32"),
+                "Topic_ID": pd.Series(dtype="object"),
                 "Topic_Size": pd.Series(dtype="int32"),
                 "Topic_Percentage": pd.Series(dtype="float64"),
                 "Top_Words": pd.Series(dtype="object"),
