@@ -177,7 +177,7 @@ class BERTopicNode:
     # === GENERAL CONFIGURATION ===
     calculate_probabilities = knext.BoolParameter(
         label="Calculate topic probabilities",
-        description="Calculate soft clustering probabilities for documents.",
+        description="Calculate soft clustering probabilities for documents and create probability columns for each topic.",
         default_value=True,
         is_advanced=True
     )
@@ -204,10 +204,10 @@ class BERTopicNode:
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
         
-        # Output 1: Documents with topics and probabilities
-        # NOTE: Topic probability columns (Topic_0_Probability, Topic_1_Probability, etc.) 
-        # will be added dynamically at execution time since we don't know the number of topics
-        # at configure time. KNIME will handle the schema extension automatically.
+        # Output 1: Documents with topics
+        # Note: When calculate_probabilities=True, additional topic probability columns 
+        # (Topic_0_Probability, Topic_1_Probability, etc.) will be added dynamically 
+        # at execution time since we don't know the number of topics yet
         schema1 = input_schema.append([
             knext.Column(knext.string(), "Topic")
         ])
@@ -345,10 +345,9 @@ class BERTopicNode:
             topics = topic_model.fit_transform(documents)
             probabilities = None
 
-        topic_info = topic_model.get_topic_info()
-        topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
-        unique_topics = len(topic_info_without_outliers)
-        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
+        # Get topic count info
+        unique_topics = sorted([t for t in set(topics) if t != -1])
+        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics (excluding outliers).")
 
         
         # Output 1: Documents + topics
@@ -360,9 +359,13 @@ class BERTopicNode:
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
 
-        # Handle probabilities - always create probability columns when probabilities are calculated
+        topic_info = topic_model.get_topic_info()
+        topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
+        unique_topics = len(topic_info_without_outliers)
+        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
+        
+        # Handle probabilities - create probability columns when probabilities are calculated
         if probabilities is not None:
-            LOGGER.info(f"Creating probability columns for topics: {unique_topics}")
             
             # Add a column for each topic's probability
             for topic_id in unique_topics:
