@@ -204,10 +204,8 @@ class BERTopicNode:
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
         
-        # Output 1: Documents with topics
-        # Note: When calculate_probabilities=True, additional topic probability columns 
-        # (Topic_0_Probability, Topic_1_Probability, etc.) will be added dynamically 
-        # at execution time since we don't know the number of topics yet
+        # We cannot determine the number of topics here, so we only return the static schema.
+        # The dynamic columns will be added to the DataFrame in the execute method.
         schema1 = input_schema.append([
             knext.Column(knext.string(), "Topic")
         ])
@@ -240,7 +238,7 @@ class BERTopicNode:
         ])
         return schema1, schema2, schema3
     
-    def execute(self, exec_context, input_table):
+    def execute(self, exec_context: knext.ExecutionContext, dataspec, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
         original_df = df.copy()
@@ -343,25 +341,25 @@ class BERTopicNode:
             topics, probabilities = topic_model.fit_transform(documents)
         else:
             topics = topic_model.fit_transform(documents)
-            probabilities = None      
+            probabilities = None
         
-        # Output 1: Documents + topics
+        # --- Output 1: Documents + topics ---
         output_df = original_df.copy()
         output_df["Topic"] = "-1"  # Default to outlier topic as string
 
         valid_indices = original_df[self.text_column].dropna().index
-        # Convert topics to strings
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
 
         topic_info = topic_model.get_topic_info()
         topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
+        
+        # Get the actual number of topics
         n_topics = len(topic_info_without_outliers)
         LOGGER.info(f"Topic modeling completed. Found {n_topics} topics.")
 
-        # Handle probabilities - create probability columns when probabilities are calculated
+        # Handle probabilities - dynamically create probability columns
         if probabilities is not None:
-            
             # Add a column for each topic's probability
             for topic_id in range(n_topics):
                 col_name = f"Topic_{topic_id}_Probability"
@@ -370,7 +368,6 @@ class BERTopicNode:
             # Fill in probabilities for each document
             for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
                 if prob_list is not None and len(prob_list) > 0:
-                    # Set individual topic probabilities
                     for topic_id in range(n_topics):
                         if topic_id < len(prob_list):
                             col_name = f"Topic_{topic_id}_Probability"
@@ -384,16 +381,19 @@ class BERTopicNode:
         # Enforce exact dtypes for main columns
         output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
 
+        # Create the output table with the correct, dynamically-generated schema
         output1 = knext.Table.from_pandas(output_df)
 
-       
-        # Output 2: Topic-word probabilities
+        
+        # --- Output 2: Topic-word probabilities ---
         
         topic_words_data = []
         all_topics = topic_model.get_topics()  # dict: topic -> List[(word, prob)]
 
         for topic_id, words in all_topics.items():
-            # words already sorted by prob desc
+            if topic_id == -1:
+                continue # skip outliers
+            
             for rank, (word, prob) in enumerate(words[: self.top_k_words], 1):
                 row_data = {
                     "Topic_ID": str(topic_id),
@@ -402,24 +402,24 @@ class BERTopicNode:
                     "Word_Rank": int(rank)
                 }
                 
-                # Only include MMR score if MMR is enabled
                 if self.use_mmr:
-                    # Use prob as placeholder MMR score
+                    # In a full implementation, MMR scores should be a separate output,
+                    # here we use a placeholder since get_topics() doesn't return MMR directly.
                     row_data["MMR_Score"] = float(prob)
                 
                 topic_words_data.append(row_data)
 
         if topic_words_data:
             topic_words_df = pd.DataFrame(topic_words_data)
-            # Ensure proper dtypes
-            topic_words_df["Topic_ID"] = topic_words_df["Topic_ID"].astype("object")
-            topic_words_df["Word"] = topic_words_df["Word"].astype("object")
-            topic_words_df["Probability"] = topic_words_df["Probability"].astype("float64")
-            topic_words_df["Word_Rank"] = topic_words_df["Word_Rank"].astype("int32")
+            topic_words_df = topic_words_df.astype({
+                "Topic_ID": "object",
+                "Word": "object",
+                "Probability": "float64",
+                "Word_Rank": "int32"
+            })
             if self.use_mmr:
                 topic_words_df["MMR_Score"] = topic_words_df["MMR_Score"].astype("float64")
         else:
-            # Empty fallback
             columns_dict = {
                 "Topic_ID": pd.Series(dtype="object"),
                 "Word": pd.Series(dtype="object"),
@@ -433,7 +433,7 @@ class BERTopicNode:
         output2 = knext.Table.from_pandas(topic_words_df)
 
         
-        # Output 3: Topic information
+        # --- Output 3: Topic information ---
         
         topic_details_data = []
         n_docs = len(documents)
@@ -445,17 +445,14 @@ class BERTopicNode:
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
 
-            # top words
-            top_words_list = [w for (w, _) in all_topics[topic_id][:5]]
+            top_words_list = [w for (w, _) in all_topics[topic_id][:self.top_k_words]]
             top_words_str = ", ".join(top_words_list)
 
-            # representative document (first doc of this topic)
             topic_docs_idx = [i for i, t in enumerate(topics) if t == topic_id]
             representative_doc = documents[topic_docs_idx[0]] if topic_docs_idx else ""
             if len(representative_doc) > 200:
                 representative_doc = representative_doc[:200] + "..."
 
-            # simple coherence proxy: avg prob of top 5 words (bounded)
             if all_topics[topic_id]:
                 top5 = all_topics[topic_id][:5]
                 coherence_score = float(sum(prob for _, prob in top5) / max(1, len(top5)))
