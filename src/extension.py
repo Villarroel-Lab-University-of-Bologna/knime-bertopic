@@ -359,7 +359,7 @@ class BERTopicNode:
         topic_info = topic_model.get_topic_info()
         topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
         unique_topics = len(topic_info_without_outliers)
-        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics.")
+        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
 
         
         # Output 1: Documents + topics
