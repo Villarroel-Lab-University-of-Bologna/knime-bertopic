@@ -343,12 +343,7 @@ class BERTopicNode:
             topics, probabilities = topic_model.fit_transform(documents)
         else:
             topics = topic_model.fit_transform(documents)
-            probabilities = None
-
-        # Get topic count info
-        unique_topics = sorted([t for t in set(topics) if t != -1])
-        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics (excluding outliers).")
-
+            probabilities = None      
         
         # Output 1: Documents + topics
         output_df = original_df.copy()
@@ -361,14 +356,14 @@ class BERTopicNode:
 
         topic_info = topic_model.get_topic_info()
         topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
-        unique_topics = len(topic_info_without_outliers)
-        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
-        
+        n_topics = len(topic_info_without_outliers)
+        LOGGER.info(f"Topic modeling completed. Found {n_topics} topics.")
+
         # Handle probabilities - create probability columns when probabilities are calculated
         if probabilities is not None:
             
             # Add a column for each topic's probability
-            for topic_id in unique_topics:
+            for topic_id in range(n_topics):
                 col_name = f"Topic_{topic_id}_Probability"
                 output_df[col_name] = 0.0
             
@@ -376,13 +371,13 @@ class BERTopicNode:
             for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
                 if prob_list is not None and len(prob_list) > 0:
                     # Set individual topic probabilities
-                    for topic_id in unique_topics:
+                    for topic_id in range(n_topics):
                         if topic_id < len(prob_list):
                             col_name = f"Topic_{topic_id}_Probability"
                             output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
             
             # Ensure proper dtypes for topic probability columns
-            for topic_id in unique_topics:
+            for topic_id in range(n_topics):
                 col_name = f"Topic_{topic_id}_Probability"
                 output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
