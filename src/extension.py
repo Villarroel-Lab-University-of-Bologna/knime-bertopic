@@ -238,7 +238,7 @@ class BERTopicNode:
         ])
         return schema1, schema2, schema3
     
-    def execute(self, exec_context: knext.ExecutionContext, dataspec, input_table):
+    def execute(self, exec_context: knext.ExecutionContext, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
         original_df = df.copy()
