@@ -345,9 +345,10 @@ class BERTopicNode:
             topics = topic_model.fit_transform(documents)
             probabilities = None
 
-        # Get topic count info
-        unique_topics = sorted([t for t in set(topics) if t != -1])
-        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics (excluding outliers).")
+        topic_info = topic_model.get_topic_info()
+        topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
+        unique_topics = len(topic_info_without_outliers)
+        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
 
         
         # Output 1: Documents + topics
