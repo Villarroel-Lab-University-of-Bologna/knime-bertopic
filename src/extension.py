@@ -204,11 +204,13 @@ class BERTopicNode:
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
         
-        # Output 1: Documents with topics and probabilities 
-        # will be added dynamically at execution time since we don't know the number of topics yet
-        schema1 = self.probabilities_schema(
-            input_schema, knext.Column(knext.string(), "Topic"), topic_probabilities_schema = None
-        )
+        # Output 1: Documents with topics and probabilities
+        # NOTE: Topic probability columns (Topic_0_Probability, Topic_1_Probability, etc.) 
+        # will be added dynamically at execution time since we don't know the number of topics
+        # at configure time. KNIME will handle the schema extension automatically.
+        schema1 = input_schema.append([
+            knext.Column(knext.string(), "Topic")
+        ])
 
         # Output 2: Topic-word probabilities
         if self.use_mmr:
@@ -238,20 +240,6 @@ class BERTopicNode:
         ])
         return schema1, schema2, schema3
     
-    def probabilities_schema(self, input_schema, topic_column, topic_probabilities_schema):
-        # Start with input schema
-        columns = list(input_schema)
-
-        # Add topic column
-        columns.append(topic_column)
-
-        # Add topic probability columns if provided
-        if topic_probabilities_schema is not None:
-            for col in topic_probabilities_schema:
-                columns.append(col)
-
-        return knext.Schema.from_columns(columns)
-    
     def execute(self, exec_context, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
@@ -262,7 +250,7 @@ class BERTopicNode:
             raise ValueError("No text column selected. Please configure the node and select a text column.")
 
         # Guard against pre-existing columns that we add
-        for col in ("Topic"):
+        for col in ("Topic",):
             if col in original_df.columns:
                 raise ValueError(
                     f"Input table already has a '{col}' column; please rename or remove it before this node."
@@ -342,6 +330,7 @@ class BERTopicNode:
         if hdbscan_model is not None:
             bertopic_params["hdbscan_model"] = hdbscan_model
         if cluster_model is not None:
+            # For KMeans, we need to pass it as hdbscan_model (BERTopic's generic clustering parameter)
             bertopic_params["hdbscan_model"] = cluster_model
         if representation_model is not None:
             bertopic_params["representation_model"] = representation_model
@@ -356,10 +345,9 @@ class BERTopicNode:
             topics = topic_model.fit_transform(documents)
             probabilities = None
 
-        topic_info = topic_model.get_topic_info()
-        topic_info_without_outliers = topic_info[topic_info['Topic'] != -1]
-        unique_topics = len(topic_info_without_outliers)
-        LOGGER.info(f"Topic modeling completed. Found {unique_topics} topics.")
+        # Get topic count info
+        unique_topics = sorted([t for t in set(topics) if t != -1])
+        LOGGER.info(f"Topic modeling completed. Found {len(unique_topics)} topics (excluding outliers).")
 
         
         # Output 1: Documents + topics
@@ -371,30 +359,28 @@ class BERTopicNode:
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
 
-        # Handle probabilities
+        # Handle probabilities - always create probability columns when probabilities are calculated
         if probabilities is not None:
-                # Get all unique topics (excluding outliers for probability columns)
-                unique_topics = sorted([t for t in set(topics) if t != -1])
-                LOGGER.info(f"Creating probability columns for topics: {unique_topics}")
-                
-                # Add a column for each topic's probability
-                for topic_id in unique_topics:
-                    col_name = f"Topic_{topic_id}_Probability"
-                    output_df[col_name] = 0.0
-                
-                # Fill in probabilities for each document
-                for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
-                    if prob_list is not None and len(prob_list) > 0:
-                        # Set individual topic probabilities
-                        for topic_id in unique_topics:
-                            if topic_id < len(prob_list):
-                                col_name = f"Topic_{topic_id}_Probability"
-                                output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
-                
-                # Ensure proper dtypes for topic probability columns
-                for topic_id in unique_topics:
-                    col_name = f"Topic_{topic_id}_Probability"
-                    output_df[col_name] = output_df[col_name].astype("float64", copy=False)
+            LOGGER.info(f"Creating probability columns for topics: {unique_topics}")
+            
+            # Add a column for each topic's probability
+            for topic_id in unique_topics:
+                col_name = f"Topic_{topic_id}_Probability"
+                output_df[col_name] = 0.0
+            
+            # Fill in probabilities for each document
+            for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
+                if prob_list is not None and len(prob_list) > 0:
+                    # Set individual topic probabilities
+                    for topic_id in unique_topics:
+                        if topic_id < len(prob_list):
+                            col_name = f"Topic_{topic_id}_Probability"
+                            output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
+            
+            # Ensure proper dtypes for topic probability columns
+            for topic_id in unique_topics:
+                col_name = f"Topic_{topic_id}_Probability"
+                output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
         # Enforce exact dtypes for main columns
         output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
