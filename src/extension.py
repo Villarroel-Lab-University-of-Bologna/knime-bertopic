@@ -206,9 +206,9 @@ class BERTopicNode:
         
         # Output 1: Documents with topics and probabilities 
         # will be added dynamically at execution time since we don't know the number of topics yet
-        schema1 = input_schema.append([
-            knext.Column(knext.string(), "Topic")
-        ])
+        schema1 = self.probabilities_schema(
+            input_schema, knext.Column(knext.string(), "Topic"), topic_probabilities_schema = None
+        )
 
         # Output 2: Topic-word probabilities
         if self.use_mmr:
@@ -237,7 +237,21 @@ class BERTopicNode:
             knext.Column(knext.double(), "Coherence_Score")
         ])
         return schema1, schema2, schema3
+    
+    def probabilities_schema(self, input_schema, topic_column, topic_probabilities_schema):
+        # Start with input schema
+        columns = list(input_schema)
 
+        # Add topic column
+        columns.append(topic_column)
+
+        # Add topic probability columns if provided
+        if topic_probabilities_schema is not None:
+            for col in topic_probabilities_schema:
+                columns.append(col)
+
+        return knext.Schema.from_columns(columns)
+    
     def execute(self, exec_context, input_table):
         # Convert to pandas
         df = input_table.to_pandas()
