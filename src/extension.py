@@ -206,9 +206,7 @@ class BERTopicNode:
         
         # We cannot determine the number of topics here, so we only return the static schema.
         # The dynamic columns will be added to the DataFrame in the execute method.
-        schema1 = input_schema.append([
-            knext.Column(knext.string(), "Topic")
-        ])
+        schema1 = None
 
         # Output 2: Topic-word probabilities
         if self.use_mmr:
@@ -216,8 +214,8 @@ class BERTopicNode:
                 knext.Column(knext.string(), "Topic_ID"),
                 knext.Column(knext.string(), "Word"),
                 knext.Column(knext.double(), "Probability"),
-                knext.Column(knext.double(), "MMR_Score"),
-                knext.Column(knext.int32(), "Word_Rank")
+                knext.Column(knext.int32(), "Word_Rank"),
+                knext.Column(knext.double(), "MMR_Score")
             ])
         else:
             schema2 = knext.Schema.from_columns([
