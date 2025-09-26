@@ -1,5 +1,5 @@
 # KNIME Topic Modeling Extension using BERT
-[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![License: Apache License 2.0](https://img.shields.io/badge/license-Apache%202-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This repository contains the source code for the KNIME Topic Modeling node, a pure Python-based KNIME extension that implements advanced topic modeling capabilities using BERTopic methodology.
 
