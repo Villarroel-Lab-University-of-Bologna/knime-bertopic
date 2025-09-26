@@ -19,17 +19,19 @@ pip = ">=25.2,<26"
 sentence-transformers = "*"
 scikit-learn = "*"
 hdbscan = "*"
+datasets = ">=4.1.0"
 
 [tool.pixi.pip]
 packages = ["flair", "torch"]
 
 [feature.build.dependencies]
-python = "3.9.*"
+python = "3.11.*"
 knime-extension-bundling = "5.7.*"
 bertopic = ">=0.17.3,<0.18"
 sentence-transformers = "*"
 scikit-learn = "*"
 hdbscan = "*"
+datasets = ">=4.1.0"
 
 [feature.debug.dependencies]
 debugpy = "*"
