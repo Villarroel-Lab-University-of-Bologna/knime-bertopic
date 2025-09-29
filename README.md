@@ -19,40 +19,6 @@ The Topic Modeling node provides an end-to-end pipeline for discovering topics i
 - **MMR Diversification**: Maximal Marginal Relevance for diverse topic keyword selection
 - **Automatic Topic Selection**: Intelligent determination of optimal topic count
 
-## Requirements
-
-### KNIME Version
-- KNIME Analytics Platform 4.7 or later
-- KNIME Python Integration
-
-### Python Dependencies
-The following Python packages are required and will be automatically installed:
-- `bertopic>=0.15.0`
-- `sentence-transformers>=2.2.0`
-- `umap-learn>=0.5.3`
-- `hdbscan>=0.8.29`
-- `scikit-learn>=1.0.0`
-- `numpy>=1.21.0`
-- `pandas>=1.3.0`
-
-## Installation
-
-1. **Install KNIME Python Integration**: Follow the [official KNIME Python installation guide](https://docs.knime.com/latest/python_installation_guide/index.html)
-
-2. **Create Conda Environment**:
-   ```bash
-   conda create -n knime-topic-modeling python=3.9
-   conda activate knime-topic-modeling
-   conda install knime-python-base knime-extension -c knime -c conda-forge
-   ```
-
-3. **Install Dependencies**:
-   ```bash
-   pip install bertopic sentence-transformers umap-learn hdbscan
-   ```
-
-4. **Install Extension**: Place the extension in your KNIME extensions directory or install via KNIME Hub
-
 ## Usage
 
 ### Input

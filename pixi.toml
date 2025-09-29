@@ -3,32 +3,37 @@ channels = ["knime", "conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 [tasks]
+test = { cmd = "pytest" }
+format = { cmd = "ruff format ." }
 
 [dependencies]
 python = "3.11.*"
+pytest = "*"
+ruff = "*"
 knime-extension = "*"
 knime-python-base = "*"
+knime-python-versions = "5.7.*"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = ">=0.17.3,<0.18"
-debugpy = ">=1.8.14,<2"
-pip = ">=25.2,<26"
 sentence-transformers = "*"
 scikit-learn = "*"
 hdbscan = "*"
-
-[tool.pixi.pip]
-packages = ["flair", "torch"]
+datasets = ">=4.1.0"
+pytorch = "*"
+python-flair = "*"
 
 [feature.build.dependencies]
-python = "3.9.*"
-knime-extension-bundling = "5.5.*"
-bertopic = ">=0.17.3,<0.18"
-sentence-transformers = "*"
-scikit-learn = "*"
-hdbscan = "*"
+python = "3.11.*"
+knime-extension-bundling = "5.7.*"
+
+[feature.debug.dependencies]
+debugpy = "*"
 
 [feature.build.tasks]
-build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "python ./.pixi/envs/build/bin/build_python_extension.py . {{ dest }}"}
+build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "build-python-extension . {{ dest }} --update-sites-version nightly"}
+register_debug_in_knime = { description = "Register the current KNIME extension with a KNIME installation. Usage: 'pixi run register-debug-in-knime' (default locations) or 'pixi run register-debug-in-knime C:/' (search entire C: drive if no executables found). Note windows paths should not end with \\ (backslash)", args = [
+                { "arg" = "search_path", "default" = "" }], cmd = "register-debug-in-knime{% if search_path %} --search-path \"{{ search_path }}\"{% endif %}" }
 
 [environments]
 build = {features = ["build"], no-default-feature = true}
+debug = {features = ["debug"]}
