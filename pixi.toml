@@ -19,10 +19,8 @@ sentence-transformers = "*"
 scikit-learn = "*"
 hdbscan = "*"
 datasets = ">=4.1.0"
-
-[pypi-dependencies]
-torch = "*"
-flair = ">=0.15.1, <0.16"
+pytorch = "*"
+python-flair = "*"
 
 [feature.build.dependencies]
 python = "3.11.*"
