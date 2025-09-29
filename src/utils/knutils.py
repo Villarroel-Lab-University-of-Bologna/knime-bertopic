@@ -75,10 +75,7 @@ def __is_type_x(column: knext.Column, type: str) -> bool:
     Checks if column contains the given type
     @return: True if Column Type is of that type
     """
-    return (
-        isinstance(column.ktype, knext.LogicalType)
-        and type in column.ktype.logical_type
-    )
+    return isinstance(column.ktype, knext.LogicalType) and type in column.ktype.logical_type
 
 
 def is_string(column: knext.Column) -> bool:
@@ -87,6 +84,7 @@ def is_string(column: knext.Column) -> bool:
     @return: True if Column Type is of type string
     """
     return column.ktype == knext.string()
+
 
 def is_nominal(column: knext.Column) -> bool:
     """
@@ -101,11 +99,7 @@ def is_numeric(column: knext.Column) -> bool:
     Checks if column is numeric e.g. int, long or double.
     @return: True if Column is numeric
     """
-    return (
-        column.ktype == knext.double()
-        or column.ktype == knext.int32()
-        or column.ktype == knext.int64()
-    )
+    return column.ktype == knext.double() or column.ktype == knext.int32() or column.ktype == knext.int64()
 
 
 def is_boolean(column: knext.Column) -> bool:
