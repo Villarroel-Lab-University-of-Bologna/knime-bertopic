@@ -152,4 +152,3 @@ def check_canceled(exec_context: knext.ExecutionContext) -> None:
     """
     if exec_context.is_canceled():
         raise RuntimeError("Execution canceled")
-

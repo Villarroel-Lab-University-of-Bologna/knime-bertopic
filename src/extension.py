@@ -17,7 +17,6 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
-
 class BERTopicNode:
     """
     Topic Extractor (BERTopic) node
@@ -62,7 +61,7 @@ class BERTopicNode:
         label="Embedding method",
         description="Method for generating document embeddings.",
         default_value="SentenceTransformers",
-        enum=["SentenceTransformers", "TF-IDF"]
+        enum=["SentenceTransformers", "TF-IDF"],
     )
 
     sentence_transformer_model = knext.StringParameter(
@@ -118,7 +117,7 @@ class BERTopicNode:
         label="Clustering method",
         description="Clustering algorithm. HDBSCAN recommended for automatic topic discovery.",
         default_value="HDBSCAN",
-        enum=["HDBSCAN", "KMeans"]
+        enum=["HDBSCAN", "KMeans"],
     )
 
     min_topic_size = knext.IntParameter(
@@ -126,7 +125,7 @@ class BERTopicNode:
         description="Minimum number of documents required to form a topic. Affects topic granularity.",
         default_value=10,
         min_value=2,
-        max_value=1000
+        max_value=1000,
     )
 
     min_samples = knext.IntParameter(
@@ -138,18 +137,14 @@ class BERTopicNode:
     ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
     n_clusters = knext.IntParameter(
-        label="Number of clusters (K-Means)",
-        description="Number of clusters for K-Means clustering.",
-        default_value=10,
-        min_value=2,
-        max_value=100
+        label="Number of clusters (K-Means)", description="Number of clusters for K-Means clustering.", default_value=10, min_value=2, max_value=100
     ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
 
     # === TOPIC REPRESENTATION ===
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
         description="Enable MMR for topic representation to balance relevance and diversity of topic terms.",
-        default_value=True
+        default_value=True,
     )
 
     mmr_diversity = knext.DoubleParameter(
@@ -299,6 +294,7 @@ class BERTopicNode:
     def _setup_representation(self):
         if self.use_mmr:
             from bertopic.representation import MaximalMarginalRelevance
+
             representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
             return representation_model
