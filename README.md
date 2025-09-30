@@ -4,6 +4,7 @@
 This repository contains the source code for the KNIME Topic Modeling node, a pure Python-based KNIME extension that implements advanced topic modeling capabilities using BERTopic methodology.
 
 ## Overview
+![Example workflow](image.png)
 
 The Topic Modeling node provides an end-to-end pipeline for discovering topics in text documents through a three-stage process:
 1. **Document Embedding**: Convert text to numerical representations using sentence transformers or TF-IDF
