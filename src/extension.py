@@ -51,6 +51,7 @@ class BERTopicNode:
 
 
     Research by Huang et al. (2024) validates this integrated pipeline's effectiveness in extracting coherent topics from domain-specific text collections, demonstrating superior performance in capturing fine-grained semantic aspects that traditional topic modeling approaches often miss.
+    [More info](https://onlinelibrary.wiley.com/doi/abs/10.1002/cb.2344)
 
     """
 
@@ -119,8 +120,7 @@ class BERTopicNode:
         label="Clustering method",
         description="Clustering algorithm. HDBSCAN recommended for automatic topic discovery.",
         default_value="HDBSCAN",
-        enum=["HDBSCAN", "KMeans"],
-        is_advanced=False,
+        enum=["HDBSCAN", "KMeans"]
     )
 
     min_topic_size = knext.IntParameter(
@@ -128,8 +128,7 @@ class BERTopicNode:
         description="Minimum number of documents required to form a topic. Affects topic granularity.",
         default_value=10,
         min_value=2,
-        max_value=1000,
-        is_advanced=False,
+        max_value=1000
     )
 
     min_samples = knext.IntParameter(
@@ -145,16 +144,14 @@ class BERTopicNode:
         description="Number of clusters for K-Means clustering.",
         default_value=10,
         min_value=2,
-        max_value=100,
-        is_advanced=False,
+        max_value=100
     ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
 
     # === TOPIC REPRESENTATION ===
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
         description="Enable MMR for topic representation to balance relevance and diversity of topic terms.",
-        default_value=True,
-        is_advanced=False,
+        default_value=True
     )
 
     mmr_diversity = knext.DoubleParameter(
