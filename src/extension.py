@@ -25,7 +25,7 @@ class BERTopicNode:
 
     The model processes text data through a validated three-stage pipeline: document embedding using pre-trained transformers, UMAP dimensionality reduction for clustering optimization, and HDBSCAN density-based clustering for automatic topic discovery. This approach significantly outperforms traditional methods, with research by Huang et al. (2024) demonstrating superior performance in capturing semantic meaning from short texts like online reviews compared to conventional LDA approaches.
 
-    Training parameters such as embedding models, UMAP components, and clustering methods can be customized. The node features automatic topic number determination and incorporates Maximal Marginal Relevance (MMR) optimization to balance topic coherence with word diversity. The node outputs three comprehensive tables: document-topic assignments with probabilities, detailed word-topic distributions with coherence metrics, and complete topic information including statistics and representative terms.
+    Training parameters such as embedding models, UMAP components, and clustering methods can be customized. The minimum and maximum values for configuration options (like UMAP components or minimum topic size) are set based on algorithmic constraints and established best practices to ensure valid model training and highly interpretable results. The node features automatic topic number determination and incorporates Maximal Marginal Relevance (MMR) optimization to balance topic coherence with word diversity. The node outputs three comprehensive tables: document-topic assignments with probabilities, detailed word-topic distributions with coherence metrics, and complete topic information including statistics and representative terms.
 
     The node implements a validated processing pipeline based on recent advances in topic modeling research:
 
@@ -48,7 +48,6 @@ class BERTopicNode:
     4. **Topic Representation**: c-TF-IDF generates topic representations by treating each cluster as a single document, with optional MMR optimization to balance word relevance and diversity for improved coherence and interpretability.
 
     5. **Output Generation**: Three comprehensive tables are produced containing document-topic assignments, detailed word-topic probabilities with coherence scores, and topic metadata including statistical summaries and representative documents.
-
 
     Research by Huang et al. (2024) validates this integrated pipeline's effectiveness in extracting coherent topics from domain-specific text collections, demonstrating superior performance in capturing fine-grained semantic aspects that traditional topic modeling approaches often miss.
 
@@ -182,7 +181,7 @@ class BERTopicNode:
         label="Random state", description="Random seed for reproducible results.", default_value=42, min_value=0, is_advanced=True
     )
 
-    def configure(self, config_context, input_schema):
+    def configure(self):
         # Validate that text column is selected
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
@@ -225,7 +224,7 @@ class BERTopicNode:
         )
         return schema1, schema2, schema3
 
-    def execute(self, exec_context: knext.ExecutionContext, input_table):
+    def execute(self, input_table):
         df = input_table.to_pandas()
         original_df = df.copy()
         self._validate_input(original_df)
@@ -239,7 +238,7 @@ class BERTopicNode:
             embedding_model, vectorizer_model, umap_model, hdbscan_model, cluster_model, representation_model
         )
         topic_model, topics, probabilities = self._fit_topic_model(bertopic_params, documents)
-        output1 = self._prepare_output1(original_df, topics, probabilities, topic_model, documents)
+        output1 = self._prepare_output1(original_df, topics, probabilities, topic_model)
         output2 = self._prepare_output2(topic_model)
         output3 = self._prepare_output3(topic_model, topics, documents)
         LOGGER.info("BERTopic node execution completed successfully")
@@ -330,7 +329,7 @@ class BERTopicNode:
             probabilities = None
         return topic_model, topics, probabilities
 
-    def _prepare_output1(self, original_df, topics, probabilities, topic_model, documents):
+    def _prepare_output1(self, original_df, topics, probabilities, topic_model):
         output_df = original_df.copy()
         output_df["Topic"] = "-1"
         valid_indices = original_df[self.text_column].dropna().index
@@ -340,21 +339,31 @@ class BERTopicNode:
         topic_info_without_outliers = topic_info[topic_info["Topic"] != -1]
         n_topics = len(topic_info_without_outliers)
         LOGGER.info(f"Topic modeling completed. Found {n_topics} topics.")
+
         if probabilities is not None:
-            for topic_id in range(n_topics):
-                col_name = f"Topic_{topic_id}_Probability"
-                output_df[col_name] = 0.0
-            for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
-                if prob_list is not None and len(prob_list) > 0:
-                    for topic_id in range(n_topics):
-                        if topic_id < len(prob_list):
-                            col_name = f"Topic_{topic_id}_Probability"
-                            output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
-            for topic_id in range(n_topics):
-                col_name = f"Topic_{topic_id}_Probability"
-                output_df[col_name] = output_df[col_name].astype("float64", copy=False)
+            self._add_probability_columns(output_df, n_topics)
+            self._assign_probabilities(output_df, valid_indices, probabilities, n_topics)
+            self._cast_probability_columns(output_df, n_topics)
+
         output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
         return knext.Table.from_pandas(output_df)
+
+    def _add_probability_columns(self, output_df, n_topics):
+        for topic_id in range(n_topics):
+            col_name = f"Topic_{topic_id}_Probability"
+            output_df[col_name] = 0.0
+
+    def _assign_probabilities(self, output_df, valid_indices, probabilities, n_topics):
+        for doc_idx, prob_list in zip(valid_indices, probabilities):
+            if prob_list is not None and len(prob_list) > 0:
+                for topic_id in range(min(n_topics, len(prob_list))):
+                    col_name = f"Topic_{topic_id}_Probability"
+                    output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
+
+    def _cast_probability_columns(self, output_df, n_topics):
+        for topic_id in range(n_topics):
+            col_name = f"Topic_{topic_id}_Probability"
+            output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
     def _prepare_output2(self, topic_model):
         topic_words_data = []
