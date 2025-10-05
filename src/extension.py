@@ -223,48 +223,31 @@ class BERTopicNode:
     def execute(self, exec_context: knext.ExecutionContext, input_table):
         df = input_table.to_pandas()
         original_df = df.copy()
-        self._validate_input(original_df)
-        documents = self._get_documents(original_df)
-        LOGGER.info(f"Processing {len(documents)} documents for topic modeling")
-        embedding_model, vectorizer_model = self._setup_embedding()
-        umap_model = self._setup_umap()
-        hdbscan_model, cluster_model = self._setup_clustering()
-        representation_model = self._setup_representation()
-        bertopic_params = self._build_bertopic_params(
-            embedding_model, vectorizer_model, umap_model, hdbscan_model, cluster_model, representation_model
-        )
-        topic_model, topics, probabilities = self._fit_topic_model(bertopic_params, documents)
-        output1 = self._prepare_output1(original_df, topics, probabilities, topic_model)
-        output2 = self._prepare_output2(topic_model)
-        output3 = self._prepare_output3(topic_model, topics, documents)
-        LOGGER.info("BERTopic node execution completed successfully")
-        return output1, output2, output3
 
-    def _validate_input(self, original_df):
         if self.text_column is None:
             raise ValueError("No text column selected. Please configure the node and select a text column.")
         for col in ("Topic",):
             if col in original_df.columns:
                 raise ValueError(f"Input table already has a '{col}' column; please rename or remove it before this node.")
 
-    def _get_documents(self, original_df):
         documents = original_df[self.text_column].dropna().astype(str).tolist()
         if not documents:
             raise ValueError("The selected text column contains no valid documents.")
-        return documents
 
-    def _setup_embedding(self):
+        LOGGER.info(f"Processing {len(documents)} documents for topic modeling")
+
+        # Set up embedding model
         embedding_model = None
         vectorizer_model = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
-        else:
+        else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
             LOGGER.info("Using TF-IDF vectorization")
-        return embedding_model, vectorizer_model
 
-    def _setup_umap(self):
+        # UMAP
+        umap_model = None
         if self.use_umap:
             umap_model = UMAP(
                 n_components=self.umap_n_components,
@@ -274,10 +257,8 @@ class BERTopicNode:
                 random_state=self.random_state,
             )
             LOGGER.info(f"UMAP configured with {self.umap_n_components} components")
-            return umap_model
-        return None
 
-    def _setup_clustering(self):
+        # Clustering
         hdbscan_model = None
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
@@ -286,21 +267,19 @@ class BERTopicNode:
                 min_cluster_size=self.min_topic_size, min_samples=ms, metric="euclidean", cluster_selection_method="eom", prediction_data=True
             )
             LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={ms or 'auto'}")
-        else:
+        else:  # KMeans
             cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
-        return hdbscan_model, cluster_model
 
-    def _setup_representation(self):
+        # Representation (MMR)
+        representation_model = None
         if self.use_mmr:
             from bertopic.representation import MaximalMarginalRelevance
 
             representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
-            return representation_model
-        return None
 
-    def _build_bertopic_params(self, embedding_model, vectorizer_model, umap_model, hdbscan_model, cluster_model, representation_model):
+        # Build BERTopic params
         bertopic_params = {"calculate_probabilities": self.calculate_probabilities, "min_topic_size": self.min_topic_size, "verbose": True}
         if embedding_model is not None:
             bertopic_params["embedding_model"] = embedding_model
@@ -314,9 +293,8 @@ class BERTopicNode:
             bertopic_params["hdbscan_model"] = cluster_model
         if representation_model is not None:
             bertopic_params["representation_model"] = representation_model
-        return bertopic_params
 
-    def _fit_topic_model(self, bertopic_params, documents):
+        # Fit
         LOGGER.info("Fitting BERTopic model...")
         topic_model = BERTopic(**bertopic_params)
         if self.calculate_probabilities:
@@ -324,11 +302,11 @@ class BERTopicNode:
         else:
             topics = topic_model.fit_transform(documents)
             probabilities = None
-        return topic_model, topics, probabilities
 
-    def _prepare_output1(self, original_df, topics, probabilities, topic_model):
+        # --- Output 1: Documents + topics ---
         output_df = original_df.copy()
-        output_df["Topic"] = "-1"
+        output_df["Topic"] = "-1"  # Default to outlier topic as string
+
         valid_indices = original_df[self.text_column].dropna().index
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
@@ -338,39 +316,44 @@ class BERTopicNode:
         LOGGER.info(f"Topic modeling completed. Found {n_topics} topics.")
 
         if probabilities is not None:
-            self._add_probability_columns(output_df, n_topics)
-            self._assign_probabilities(output_df, valid_indices, probabilities, n_topics)
-            self._cast_probability_columns(output_df, n_topics)
+            # Add a column for each topic's probability
+            for topic_id in range(n_topics):
+                col_name = f"Topic_{topic_id}_Probability"
+                output_df[col_name] = 0.0
 
+            # Fill in probabilities for each document
+            for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
+                if prob_list is not None and len(prob_list) > 0:
+                    for topic_id in range(n_topics):
+                        if topic_id < len(prob_list):
+                            col_name = f"Topic_{topic_id}_Probability"
+                            output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
+
+            # Ensure proper dtypes for topic probability columns
+            for topic_id in range(n_topics):
+                col_name = f"Topic_{topic_id}_Probability"
+                output_df[col_name] = output_df[col_name].astype("float64", copy=False)
+
+        # Enforce exact dtypes for main columns
         output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
-        return knext.Table.from_pandas(output_df)
 
-    def _add_probability_columns(self, output_df, n_topics):
-        for topic_id in range(n_topics):
-            col_name = f"Topic_{topic_id}_Probability"
-            output_df[col_name] = 0.0
+        # Create the output table with the correct, dynamically-generated schema
+        output1 = knext.Table.from_pandas(output_df)
 
-    def _assign_probabilities(self, output_df, valid_indices, probabilities, n_topics):
-        for doc_idx, prob_list in zip(valid_indices, probabilities):
-            if prob_list is not None and len(prob_list) > 0:
-                for topic_id in range(min(n_topics, len(prob_list))):
-                    col_name = f"Topic_{topic_id}_Probability"
-                    output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
+        # --- Output 2: Topic-word probabilities ---
 
-    def _cast_probability_columns(self, output_df, n_topics):
-        for topic_id in range(n_topics):
-            col_name = f"Topic_{topic_id}_Probability"
-            output_df[col_name] = output_df[col_name].astype("float64", copy=False)
-
-    def _prepare_output2(self, topic_model):
         topic_words_data = []
-        all_topics = topic_model.get_topics()
+        all_topics = topic_model.get_topics()  # dict: topic -> List[(word, prob)]
+
         for topic_id, words in all_topics.items():
             if topic_id == -1:
-                continue
+                continue  # skip outliers
+
             for rank, (word, prob) in enumerate(words[: self.top_k_words], 1):
                 row_data = {"Topic_ID": str(topic_id), "Word": str(word), "Probability": float(prob), "Word_Rank": int(rank)}
                 if self.use_mmr:
+                    # In a full implementation, MMR scores should be a separate output,
+                    # here we use a placeholder since get_topics() doesn't return MMR directly.
                     row_data["MMR_Score"] = float(prob)
                 topic_words_data.append(row_data)
         if topic_words_data:
@@ -388,15 +371,17 @@ class BERTopicNode:
             if self.use_mmr:
                 columns_dict["MMR_Score"] = pd.Series(dtype="float64")
             topic_words_df = pd.DataFrame(columns_dict)
-        return knext.Table.from_pandas(topic_words_df)
 
-    def _prepare_output3(self, topic_model, topics, documents):
+        output2 = knext.Table.from_pandas(topic_words_df)
+
+        # --- Output 3: Topic information ---
+
         topic_details_data = []
-        all_topics = topic_model.get_topics()
         n_docs = len(documents)
         for topic_id in all_topics.keys():
             if topic_id == -1:
-                continue
+                continue  # skip outliers
+
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
             top_words_list = [w for (w, _) in all_topics[topic_id][: self.top_k_words]]
@@ -442,4 +427,8 @@ class BERTopicNode:
                     "Coherence_Score": pd.Series(dtype="float64"),
                 }
             )
-        return knext.Table.from_pandas(topic_details_df)
+
+        output3 = knext.Table.from_pandas(topic_details_df)
+
+        LOGGER.info("BERTopic node execution completed successfully")
+        return output1, output2, output3
