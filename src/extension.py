@@ -177,7 +177,7 @@ class BERTopicNode:
         label="Random state", description="Random seed for reproducible results.", default_value=42, min_value=0, is_advanced=True
     )
 
-    def configure(self, input_schema, exec_context: knext.ExecutionContext):
+    def configure(self, exec_context: knext.ExecutionContext, input_schema):
         # Validate that text column is selected
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
@@ -220,7 +220,7 @@ class BERTopicNode:
         )
         return schema1, schema2, schema3
 
-    def execute(self, input_table, exec_context: knext.ExecutionContext):
+    def execute(self, exec_context: knext.ExecutionContext, input_table):
         df = input_table.to_pandas()
         original_df = df.copy()
         self._validate_input(original_df)
