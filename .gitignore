@@ -40,7 +40,6 @@ Thumbs.db
 *.exe
 *.war
 
-config.yml
 
 # Large media files
 *.mp4
