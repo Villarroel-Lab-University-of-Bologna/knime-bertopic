@@ -17,7 +17,6 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
-@knext.output_table(name="UMAP Coordinates for Visualization", description="2D UMAP coordinates and assigned Topic ID for scatter plot visualization.", optional=True) # <-- NEW OUTPUT PORT
 class BERTopicNode:
     """
     Topic Extractor (BERTopic) node
@@ -183,21 +182,32 @@ class BERTopicNode:
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
 
-        # --- Output 1: Document-Topic Probabilities (Schema is dynamic, returning None)
+        # We cannot determine the number of topics here, so we only return the static schema.
+        # The dynamic columns will be added to the DataFrame in the execute method.
         schema1 = None
 
-        # --- Output 2: Topic-word probabilities (Schema is static)
-        columns2 = [
-            knext.Column(knext.string(), "Topic_ID"),
-            knext.Column(knext.string(), "Word"),
-            knext.Column(knext.double(), "Probability"),
-            knext.Column(knext.int32(), "Word_Rank"),
-        ]
+        # Output 2: Topic-word probabilities
         if self.use_mmr:
-            columns2.append(knext.Column(knext.double(), "MMR_Score"))
-        schema2 = knext.Schema.from_columns(columns2)
+            schema2 = knext.Schema.from_columns(
+                [
+                    knext.Column(knext.string(), "Topic_ID"),
+                    knext.Column(knext.string(), "Word"),
+                    knext.Column(knext.double(), "Probability"),
+                    knext.Column(knext.int32(), "Word_Rank"),
+                    knext.Column(knext.double(), "MMR_Score"),
+                ]
+            )
+        else:
+            schema2 = knext.Schema.from_columns(
+                [
+                    knext.Column(knext.string(), "Topic_ID"),
+                    knext.Column(knext.string(), "Word"),
+                    knext.Column(knext.double(), "Probability"),
+                    knext.Column(knext.int32(), "Word_Rank"),
+                ]
+            )
 
-        # --- Output 3: Topic Information (Schema is static)
+        # Output 3: Topic information
         schema3 = knext.Schema.from_columns(
             [
                 knext.Column(knext.string(), "Topic_ID"),
@@ -208,52 +218,37 @@ class BERTopicNode:
                 knext.Column(knext.double(), "Coherence_Score"),
             ]
         )
-
-        # --- Output 4: UMAP Coordinates for Visualization (Schema is static) <-- NEW
-        schema4 = knext.Schema.from_columns(
-            [
-                knext.Column(knext.string(), "Topic_ID"),
-                knext.Column(knext.double(), "UMAP_X"),
-                knext.Column(knext.double(), "UMAP_Y"),
-                knext.Column(knext.string(), "Document"),
-            ]
-        )
-
-        return schema1, schema2, schema3, schema4 # Return all four schemas
+        return schema1, schema2, schema3
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
         df = input_table.to_pandas()
         original_df = df.copy()
 
         if self.text_column is None:
-             raise ValueError("No text column selected. Please configure the node and select a text column.")
+            raise ValueError("No text column selected. Please configure the node and select a text column.")
         for col in ("Topic",):
-             if col in original_df.columns:
-                 raise ValueError(f"Input table already has a '{col}' column; please rename or remove it before this node.")
+            if col in original_df.columns:
+                raise ValueError(f"Input table already has a '{col}' column; please rename or remove it before this node.")
 
         documents = original_df[self.text_column].dropna().astype(str).tolist()
         if not documents:
-             raise ValueError("The selected text column contains no valid documents.")
+            raise ValueError("The selected text column contains no valid documents.")
 
         LOGGER.info(f"Processing {len(documents)} documents for topic modeling")
-        valid_indices = original_df[self.text_column].dropna().index
 
-        # --- Set up Embedding Model and Embed Documents ---
-        # We need the raw embeddings for the *visualization* UMAP, which is always 2D.
-        embedding_model_vis = None
-        embeddings = None
+        # Set up embedding model
+        embedding_model = None
         vectorizer_model = None
         if self.embedding_method == "SentenceTransformers":
-            embedding_model_vis = SentenceTransformer(self.sentence_transformer_model)
-            embeddings = embedding_model_vis.encode(documents, show_progress_bar=False)
+            embedding_model = SentenceTransformer(self.sentence_transformer_model)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
-        else:
+        else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
-            LOGGER.info("Using TF-IDF vectorization (UMAP visualization output will be empty).")
+            LOGGER.info("Using TF-IDF vectorization")
 
-        # --- UMAP for Clustering (Uses user's components/settings) ---
+        # UMAP
         umap_model = None
-        if self.use_umap and embeddings is not None: # UMAP is only useful on dense embeddings
+        if self.use_umap:
             umap_model = UMAP(
                 n_components=self.umap_n_components,
                 n_neighbors=self.umap_n_neighbors,
@@ -261,54 +256,54 @@ class BERTopicNode:
                 metric="cosine",
                 random_state=self.random_state,
             )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components for clustering")
+            LOGGER.info(f"UMAP configured with {self.umap_n_components} components")
 
-        # --- Clustering (Original logic) ---
+        # Clustering
         hdbscan_model = None
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
-             ms = None if self.min_samples == 1 else self.min_samples
-             hdbscan_model = hdbscan.HDBSCAN(
-                 min_cluster_size=self.min_topic_size, min_samples=ms, metric="euclidean", cluster_selection_method="eom", prediction_data=True
-             )
-             LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={ms or 'auto'}")
-        else:
-             cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state, n_init='auto')
-             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
+            ms = None if self.min_samples == 1 else self.min_samples
+            hdbscan_model = hdbscan.HDBSCAN(
+                min_cluster_size=self.min_topic_size, min_samples=ms, metric="euclidean", cluster_selection_method="eom", prediction_data=True
+            )
+            LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={ms or 'auto'}")
+        else:  # KMeans
+            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
+            LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
 
-        # --- Representation (MMR) (Original logic) ---
+        # Representation (MMR)
         representation_model = None
         if self.use_mmr:
-             from bertopic.representation import MaximalMarginalRelevance
-             representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
-             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
+            from bertopic.representation import MaximalMarginalRelevance
 
-        # --- Build BERTopic params and Fit ---
+            representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
+            LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
+
+        # Build BERTopic params
         bertopic_params = {"calculate_probabilities": self.calculate_probabilities, "min_topic_size": self.min_topic_size, "verbose": True}
-        if embedding_model_vis is not None:
-             bertopic_params["embedding_model"] = embedding_model_vis
+        if embedding_model is not None:
+            bertopic_params["embedding_model"] = embedding_model
         if vectorizer_model is not None:
-             bertopic_params["vectorizer_model"] = vectorizer_model
+            bertopic_params["vectorizer_model"] = vectorizer_model
         if umap_model is not None:
-             bertopic_params["umap_model"] = umap_model
+            bertopic_params["umap_model"] = umap_model
         if hdbscan_model is not None:
-             bertopic_params["hdbscan_model"] = hdbscan_model
+            bertopic_params["hdbscan_model"] = hdbscan_model
         if cluster_model is not None:
-             bertopic_params["hdbscan_model"] = cluster_model
+            bertopic_params["hdbscan_model"] = cluster_model
         if representation_model is not None:
-             bertopic_params["representation_model"] = representation_model
+            bertopic_params["representation_model"] = representation_model
 
+        # Fit
         LOGGER.info("Fitting BERTopic model...")
         topic_model = BERTopic(**bertopic_params)
         if self.calculate_probabilities:
-             topics, probabilities = topic_model.fit_transform(documents, embeddings)
+            topics, probabilities = topic_model.fit_transform(documents)
         else:
-             topics = topic_model.fit_transform(documents, embeddings)
-             probabilities = None
+            topics = topic_model.fit_transform(documents)
+            probabilities = None
 
-        topics_str = [str(t) for t in topics]
-
-       # --- Output 1: Documents + topics ---
+        # --- Output 1: Documents + topics ---
         output_df = original_df.copy()
         output_df["Topic"] = "-1"  # Default to outlier topic as string
 
@@ -435,50 +430,5 @@ class BERTopicNode:
 
         output3 = knext.Table.from_pandas(topic_details_df)
 
-        # --- Output 4: UMAP Coordinates for Visualization <-- NEW LOGIC ---
-        umap_output_df = pd.DataFrame()
-
-        # Check if embeddings were generated (i.e., not using TF-IDF)
-        if embeddings is not None:
-            LOGGER.info("Reducing embeddings to 2D for visualization...")
-
-            # Create a dedicated UMAP model for 2D visualization
-            umap_model_vis_2d = UMAP(
-                n_components=2,  # Fixed at 2 for a scatter plot
-                n_neighbors=self.umap_n_neighbors,
-                min_dist=self.umap_min_dist,
-                metric='cosine',
-                random_state=self.random_state
-            )
-
-            umap_2d_coords = umap_model_vis_2d.fit_transform(embeddings)
-
-            umap_output_df = pd.DataFrame({
-                'Topic_ID': pd.Series(topics_str, index=valid_indices).values,
-                'UMAP_X': umap_2d_coords[:, 0],
-                'UMAP_Y': umap_2d_coords[:, 1],
-                'Document': pd.Series(documents, index=valid_indices).values,
-            })
-
-            # Ensure dtypes are correct for KNIME
-            umap_output_df = umap_output_df.astype({
-                'Topic_ID': 'object',
-                'UMAP_X': 'float64',
-                'UMAP_Y': 'float64',
-                'Document': 'object'
-            })
-        else:
-             # Create an empty DataFrame with the correct schema if no UMAP visualization is possible
-             umap_output_df = pd.DataFrame(
-                 {
-                     "Topic_ID": pd.Series(dtype="object"),
-                     "UMAP_X": pd.Series(dtype="float64"),
-                     "UMAP_Y": pd.Series(dtype="float64"),
-                     "Document": pd.Series(dtype="object"),
-                 }
-             )
-
-        output4 = knext.Table.from_pandas(umap_output_df)
-
         LOGGER.info("BERTopic node execution completed successfully")
-        return output1, output2, output3, output4 # Return all four output tables
+        return output1, output2, output3
