@@ -8,6 +8,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from umap import UMAP
 import hdbscan
 import utils.knutils as kutil
+import numpy as np
 
 LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class BERTopicNode:
     umap_n_components = knext.IntParameter(
         label="UMAP components",
         description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
-        default_value=5,
+        default_value=2,
         min_value=2,
         max_value=100,
         is_advanced=True,
@@ -241,6 +242,7 @@ class BERTopicNode:
         vectorizer_model = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
+            embeddings = embedding_model.encode(documents, show_progress_bar=False)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
@@ -248,7 +250,7 @@ class BERTopicNode:
 
         # UMAP
         umap_model = None
-        if self.use_umap:
+        if self.use_umap and embeddings is not None:
             umap_model = UMAP(
                 n_components=self.umap_n_components,
                 n_neighbors=self.umap_n_neighbors,
@@ -310,6 +312,31 @@ class BERTopicNode:
         valid_indices = original_df[self.text_column].dropna().index
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
+
+        # Add the UMAP Coordinates to Output 1
+        output_df['UMAP_X'] = np.nan
+        output_df['UMAP_Y'] = np.nan
+
+        if embeddings is not None:
+            LOGGER.info("Generating 2D UMAP coordinates for visualization.")
+            # Use a dedicated UMAP model for 2D visualization (fixed n_components=2)
+            umap_model_vis_2d = UMAP(
+                n_components=2,
+                n_neighbors=self.umap_n_neighbors,
+                min_dist=self.umap_min_dist,
+                metric='cosine',
+                random_state=self.random_state
+            )
+            umap_2d_coords = umap_model_vis_2d.fit_transform(embeddings)
+
+            # Assign UMAP coordinates to valid indices
+            output_df.loc[valid_indices, 'UMAP_X'] = umap_2d_coords[:, 0]
+            output_df.loc[valid_indices, 'UMAP_Y'] = umap_2d_coords[:, 1]
+
+            # Ensure proper dtypes
+            output_df['UMAP_X'] = output_df['UMAP_X'].astype("float64", copy=False)
+            output_df['UMAP_Y'] = output_df['UMAP_Y'].astype("float64", copy=False)
+
         topic_info = topic_model.get_topic_info()
         topic_info_without_outliers = topic_info[topic_info["Topic"] != -1]
         n_topics = len(topic_info_without_outliers)
