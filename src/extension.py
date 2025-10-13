@@ -8,7 +8,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 from umap import UMAP
 import hdbscan
 import utils.knutils as kutil
-import numpy as np
 
 LOGGER = logging.getLogger(__name__)
 
@@ -113,6 +112,14 @@ class BERTopicNode:
         is_advanced=True,
     ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
+    umap_metric = knext.StringParameter(
+        label="UMAP Distance Metric",
+        description="Distance metric for UMAP. Cosine is often best for text embeddings.",
+        default_value="cosine",
+        enum=["cosine", "euclidean", "manhattan"],
+        is_advanced=True,
+    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
+
     # === STAGE 3: CLUSTERING ===
     clustering_method = knext.StringParameter(
         label="Clustering method",
@@ -121,8 +128,8 @@ class BERTopicNode:
         enum=["HDBSCAN", "KMeans"],
     )
 
-    min_topic_size = knext.IntParameter(
-        label="Minimum topic size",
+    min_cluster_size = knext.IntParameter(
+        label="Minimum Cluster size",
         description="Minimum number of documents required to form a topic. Affects topic granularity.",
         default_value=10,
         min_value=2,
@@ -141,6 +148,14 @@ class BERTopicNode:
         label="Number of clusters (K-Means)", description="Number of clusters for K-Means clustering.", default_value=10, min_value=2, max_value=100
     ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
 
+    hdbscan_metric = knext.StringParameter(
+        label="HDBSCAN Distance Metric",
+        description="Distance metric for HDBSCAN. Euclidean is the default, but cosine may be better for text.",
+        default_value="euclidean",
+        enum=["euclidean", "cosine", "manhattan"],
+        is_advanced=True,
+    ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
+
     # === TOPIC REPRESENTATION ===
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
@@ -157,7 +172,6 @@ class BERTopicNode:
         is_advanced=True,
     ).rule(knext.OneOf(use_mmr, [False]), knext.Effect.HIDE)
 
-    # === GENERAL CONFIGURATION ===
     calculate_probabilities = knext.BoolParameter(
         label="Calculate topic probabilities",
         description="Calculate soft clustering probabilities for documents and create probability columns for each topic.",
@@ -183,11 +197,21 @@ class BERTopicNode:
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
 
-        # We cannot determine the number of topics here, so we only return the static schema.
-        # The dynamic columns will be added to the DataFrame in the execute method.
-        schema1 = None
+        # === Output 1: Documents + topics (Handling dynamic columns) ===
 
-        # Output 2: Topic-word probabilities
+        schema1_columns = input_schema.columns.copy()
+        schema1_columns.extend(
+            [
+                knext.Column(knext.string(), "Topic"),
+                knext.Column(knext.double(), "UMAP_X"),
+                knext.Column(knext.double(), "UMAP_Y"),
+                knext.Column(knext.list_of(knext.double()), "Embedding_Vector"),
+            ]
+        )
+
+        schema1 = knext.Schema.from_columns(schema1_columns)
+
+        # === Output 2: Topic-word probabilities ===
         if self.use_mmr:
             schema2 = knext.Schema.from_columns(
                 [
@@ -208,7 +232,7 @@ class BERTopicNode:
                 ]
             )
 
-        # Output 3: Topic information
+        # === Output 3: Topic information ===
         schema3 = knext.Schema.from_columns(
             [
                 knext.Column(knext.string(), "Topic_ID"),
@@ -255,10 +279,10 @@ class BERTopicNode:
                 n_components=self.umap_n_components,
                 n_neighbors=self.umap_n_neighbors,
                 min_dist=self.umap_min_dist,
-                metric="cosine",
+                metric=self.umap_metric,
                 random_state=self.random_state,
             )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components")
+            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -266,9 +290,15 @@ class BERTopicNode:
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
             hdbscan_model = hdbscan.HDBSCAN(
-                min_cluster_size=self.min_topic_size, min_samples=ms, metric="euclidean", cluster_selection_method="eom", prediction_data=True
+                min_cluster_size=self.min_cluster_size,
+                min_samples=ms,
+                metric=self.hdbscan_metric,
+                cluster_selection_method="eom",
+                prediction_data=True,
             )
-            LOGGER.info(f"HDBSCAN configured with min_cluster_size={self.min_topic_size}, min_samples={ms or 'auto'}")
+            LOGGER.info(
+                f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
+            )
         else:  # KMeans
             cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
@@ -314,8 +344,8 @@ class BERTopicNode:
         output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
 
         # Add the UMAP Coordinates to Output 1
-        output_df["UMAP_X"] = np.nan
-        output_df["UMAP_Y"] = np.nan
+        output_df["UMAP_X"] = None
+        output_df["UMAP_Y"] = None
 
         if embeddings is not None:
             LOGGER.info("Generating 2D UMAP coordinates for visualization.")
@@ -344,7 +374,6 @@ class BERTopicNode:
                 col_name = f"Topic_{topic_id}_Probability"
                 output_df[col_name] = 0.0
 
-            # Fill in probabilities for each document
             for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
                 if prob_list is not None and len(prob_list) > 0:
                     for topic_id in range(n_topics):
@@ -352,7 +381,6 @@ class BERTopicNode:
                             col_name = f"Topic_{topic_id}_Probability"
                             output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
 
-            # Ensure proper dtypes for topic probability columns
             for topic_id in range(n_topics):
                 col_name = f"Topic_{topic_id}_Probability"
                 output_df[col_name] = output_df[col_name].astype("float64", copy=False)
@@ -364,9 +392,8 @@ class BERTopicNode:
         output1 = knext.Table.from_pandas(output_df)
 
         # --- Output 2: Topic-word probabilities ---
-
         topic_words_data = []
-        all_topics = topic_model.get_topics()  # dict: topic -> List[(word, prob)]
+        all_topics = topic_model.get_topics()
 
         for topic_id, words in all_topics.items():
             if topic_id == -1:
@@ -398,7 +425,6 @@ class BERTopicNode:
         output2 = knext.Table.from_pandas(topic_words_df)
 
         # --- Output 3: Topic information ---
-
         topic_details_data = []
         n_docs = len(documents)
         for topic_id in all_topics.keys():
