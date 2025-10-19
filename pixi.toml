@@ -24,7 +24,7 @@ python-flair = "*"
 
 [feature.build.dependencies]
 python = "3.11.*"
-knime-extension-bundling = ">=5.7.*"
+knime-extension-bundling = "5.7.*"
 
 [feature.debug.dependencies]
 debugpy = "*"
