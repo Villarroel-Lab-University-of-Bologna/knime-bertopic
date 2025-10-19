@@ -199,7 +199,7 @@ class BERTopicNode:
 
         # === Output 1: Documents + topics (Handling dynamic columns) ===
 
-        schema1_columns = list(input_table_schema.columns)
+        schema1_columns = list(input_table_schema.column_list())
         schema1_columns.extend(
             [
                 knext.Column(knext.string(), "Topic"),
