@@ -192,14 +192,14 @@ class BERTopicNode:
         label="Random state", description="Random seed for reproducible results.", default_value=42, min_value=0, is_advanced=True
     )
 
-    def configure(self, exec_context: knext.ExecutionContext, input_table_schema: knext.Schema):
+    def configure(self, exec_context: knext.ExecutionContext, input_schema):
         # Validate that text column is selected
         if self.text_column is None:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
 
         # === Output 1: Documents + topics (Handling dynamic columns) ===
 
-        schema1_columns = list(input_table_schema.column_list())
+        schema1_columns = input_schema.copy()
         schema1_columns.extend(
             [
                 knext.Column(knext.string(), "Topic"),
