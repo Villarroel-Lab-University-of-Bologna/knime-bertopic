@@ -200,7 +200,7 @@ class BERTopicNode:
         # === Output 1: Documents + topics (Handling dynamic columns) ===
 
         schema1_columns = input_schema
-        schema1_columns.extend(
+        schema1_columns.append(
             [
                 knext.Column(knext.string(), "Topic"),
                 knext.Column(knext.double(), "UMAP_X"),
