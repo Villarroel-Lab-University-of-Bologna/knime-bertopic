@@ -205,7 +205,7 @@ class BERTopicNode:
                 knext.Column(knext.string(), "Topic"),
                 knext.Column(knext.double(), "UMAP_X"),
                 knext.Column(knext.double(), "UMAP_Y"),
-                knext.Column(knext.list_of(knext.double()), "Embedding_Vector"),
+                knext.Column(knext.double(), "Embedding_Vector"),
             ]
         )
 
