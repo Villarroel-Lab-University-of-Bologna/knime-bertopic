@@ -205,7 +205,6 @@ class BERTopicNode:
                 knext.Column(knext.string(), "Topic"),
                 knext.Column(knext.double(), "UMAP_X"),
                 knext.Column(knext.double(), "UMAP_Y"),
-                knext.Column(knext.double(), "Embedding_Vector"),
             ]
         )
 
@@ -264,6 +263,7 @@ class BERTopicNode:
         # Set up embedding model
         embedding_model = None
         vectorizer_model = None
+        embeddings = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
             embeddings = embedding_model.encode(documents, show_progress_bar=False)
@@ -312,7 +312,7 @@ class BERTopicNode:
             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
 
         # Build BERTopic params
-        bertopic_params = {"calculate_probabilities": self.calculate_probabilities, "min_topic_size": self.min_topic_size, "verbose": True}
+        bertopic_params = {"calculate_probabilities": self.calculate_probabilities, "min_topic_size": self.min_cluster_size, "verbose": True}
         if embedding_model is not None:
             bertopic_params["embedding_model"] = embedding_model
         if vectorizer_model is not None:
