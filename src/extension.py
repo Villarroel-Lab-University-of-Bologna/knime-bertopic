@@ -199,8 +199,8 @@ class BERTopicNode:
 
         # === Output 1: Documents + topics (Handling dynamic columns) ===
 
-        schema1_columns = input_schema.columns.copy()
-        schema1_columns.extend(
+        schema1 = input_schema
+        schema1.append(
             [
                 knext.Column(knext.string(), "Topic"),
                 knext.Column(knext.double(), "UMAP_X"),
@@ -208,7 +208,6 @@ class BERTopicNode:
             ]
         )
 
-        schema1 = knext.Schema.from_columns(schema1_columns)
 
         # === Output 2: Topic-word probabilities ===
         if self.use_mmr:
