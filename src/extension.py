@@ -198,14 +198,7 @@ class BERTopicNode:
             raise knext.InvalidParametersError("Please select a text column for topic modeling.")
 
         # === Output 1: Documents + topics (Handling dynamic columns) ===
-        schema1 = input_schema
-        schema1.append(
-            [
-                knext.Column(knext.string(), "Topic"),
-                knext.Column(knext.double(), "UMAP_X"),
-                knext.Column(knext.double(), "UMAP_Y"),
-            ]
-        )
+        schema1 = None
 
         # === Output 2: Topic-word probabilities ===
         if self.use_mmr:
