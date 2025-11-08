@@ -1,6 +1,6 @@
 import knime.extension as knext
 import logging
-
+import pickle
 
 LOGGER = logging.getLogger(__name__)
 
@@ -152,3 +152,162 @@ def check_canceled(exec_context: knext.ExecutionContext) -> None:
     """
     if exec_context.is_canceled():
         raise RuntimeError("Execution canceled")
+
+class BERTopicModelObjectSpec(knext.PortObjectSpec):
+    """
+    Specification of BERTopic model port.
+    """
+
+    def __init__(
+        self,
+        text_column_name: str,
+        n_topics: int,
+        embedding_method: str,
+        clustering_method: str,
+        use_mmr: bool,
+    ) -> None:
+        self._text_column_name = text_column_name
+        self._n_topics = n_topics
+        self._embedding_method = embedding_method
+        self._clustering_method = clustering_method
+        self._use_mmr = use_mmr
+
+    def serialize(self) -> dict:
+        return {
+            "text_column_name": self._text_column_name,
+            "n_topics": self._n_topics,
+            "embedding_method": self._embedding_method,
+            "clustering_method": self._clustering_method,
+            "use_mmr": self._use_mmr,
+        }
+
+    @classmethod
+    def deserialize(cls, data: dict) -> "BERTopicModelObjectSpec":
+        return cls(
+            data["text_column_name"],
+            data["n_topics"],
+            data["embedding_method"],
+            data["clustering_method"],
+            data["use_mmr"],
+        )
+
+    @property
+    def text_column_name(self) -> str:
+        return self._text_column_name
+
+    @property
+    def n_topics(self) -> int:
+        return self._n_topics
+
+    @property
+    def embedding_method(self) -> str:
+        return self._embedding_method
+
+    @property
+    def clustering_method(self) -> str:
+        return self._clustering_method
+
+    @property
+    def use_mmr(self) -> bool:
+        return self._use_mmr
+
+
+class BERTopicModelObject(knext.PortObject):
+    """
+    Port object containing the trained BERTopic model.
+    """
+
+    def __init__(
+        self,
+        spec: BERTopicModelObjectSpec,
+        model,
+        documents: list = None,
+    ) -> None:
+        super().__init__(spec)
+        self._model = model
+        self._documents = documents  # Optional: store training documents for reference
+
+    def serialize(self) -> bytes:
+        """
+        Serialize the BERTopic model and associated data.
+        """
+        return pickle.dumps(
+            {
+                "model": self._model,
+                "documents": self._documents,
+            }
+        )
+
+    @property
+    def spec(self) -> BERTopicModelObjectSpec:
+        return super().spec
+
+    @property
+    def model(self):
+        """Returns the BERTopic model instance."""
+        return self._model
+
+    @property
+    def documents(self) -> list:
+        """Returns the training documents if stored."""
+        return self._documents
+
+    @classmethod
+    def deserialize(
+        cls, spec: BERTopicModelObjectSpec, data: bytes
+    ) -> "BERTopicModelObject":
+        """
+        Deserialize the BERTopic model and associated data.
+        """
+        deserialized_data = pickle.loads(data)
+        return cls(
+            spec,
+            deserialized_data["model"],
+            deserialized_data.get("documents"),
+        )
+
+    def transform_documents(self, documents: list):
+        """
+        Transform new documents using the trained model.
+        Returns topics and probabilities.
+        """
+        if self._model is None:
+            raise ValueError("Model is not set.")
+
+        topics, probabilities = self._model.transform(documents)
+        return topics, probabilities
+
+    def get_topic_info(self):
+        """
+        Get information about all topics in the model.
+        """
+        if self._model is None:
+            raise ValueError("Model is not set.")
+
+        return self._model.get_topic_info()
+
+    def get_topics(self):
+        """
+        Get all topics with their word representations.
+        """
+        if self._model is None:
+            raise ValueError("Model is not set.")
+
+        return self._model.get_topics()
+
+    def get_topic(self, topic_id: int):
+        """
+        Get a specific topic's word representation.
+        """
+        if self._model is None:
+            raise ValueError("Model is not set.")
+
+        return self._model.get_topic(topic_id)
+
+
+# Define the BERTopic model port type
+bertopic_model_port_type = knext.port_type(
+    name="BERTopic Model",
+    object_class=BERTopicModelObject,
+    spec_class=BERTopicModelObjectSpec,
+)
