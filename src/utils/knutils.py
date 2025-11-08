@@ -153,6 +153,7 @@ def check_canceled(exec_context: knext.ExecutionContext) -> None:
     if exec_context.is_canceled():
         raise RuntimeError("Execution canceled")
 
+
 class BERTopicModelObjectSpec(knext.PortObjectSpec):
     """
     Specification of BERTopic model port.
@@ -253,9 +254,7 @@ class BERTopicModelObject(knext.PortObject):
         return self._documents
 
     @classmethod
-    def deserialize(
-        cls, spec: BERTopicModelObjectSpec, data: bytes
-    ) -> "BERTopicModelObject":
+    def deserialize(cls, spec: BERTopicModelObjectSpec, data: bytes) -> "BERTopicModelObject":
         """
         Deserialize the BERTopic model and associated data.
         """
