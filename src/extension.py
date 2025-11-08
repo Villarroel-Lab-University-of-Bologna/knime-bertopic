@@ -477,7 +477,19 @@ class BERTopicNode:
 
         # --- Output 4: BERTopic Model ---
         # Wrap the trained model using the custom port type
-        model_output = topic_model
+        model_spec = kutil.BERTopicModelObjectSpec(
+            text_column_name=self.text_column,
+            n_topics=n_topics,
+            embedding_method=self.embedding_method,
+            clustering_method=self.clustering_method,
+            use_mmr=self.use_mmr,
+        )
+
+        model_output = kutil.BERTopicModelObject(
+            spec=model_spec,
+            model=topic_model,
+            documents=documents,
+        )
 
         LOGGER.info("BERTopic node execution completed successfully")
         return output1, output2, output3, model_output
