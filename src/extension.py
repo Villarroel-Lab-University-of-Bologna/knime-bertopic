@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
+@knext.output_port(name="BERTopic Model", port_type=kutil.bertopic_model_port_type, description="Output containing the trained Vision Transformer model.")
 class BERTopicNode:
     """
     Topic Extractor (BERTopic) node
