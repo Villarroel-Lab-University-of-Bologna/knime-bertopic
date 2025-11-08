@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
 @knext.output_table(name="Topic Information", description="Detailed information about each discovered topic including size and representative terms.")
-@knext.output_port(name="BERTopic Model", port_type=kutil.bertopic_model_port_type, description="Output containing the trained Vision Transformer model.")
+@knext.output_port(name="BERTopic Model", port_type=kutil.bertopic_model_port_type, description="Output containing the trained BERTopic model.")
 class BERTopicNode:
     """
     Topic Extractor (BERTopic) node
@@ -233,7 +233,12 @@ class BERTopicNode:
                 knext.Column(knext.double(), "Coherence_Score"),
             ]
         )
-        return schema1, schema2, schema3
+        # === Output 4: Model port ===
+        # For object ports, we typically return None as the port spec
+        # The actual port type is defined in the decorator
+        model_port_spec = None
+
+        return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
         df = input_table.to_pandas()
@@ -470,5 +475,9 @@ class BERTopicNode:
 
         output3 = knext.Table.from_pandas(topic_details_df)
 
+        # --- Output 4: BERTopic Model ---
+        # Wrap the trained model using the custom port type
+        model_output = topic_model
+
         LOGGER.info("BERTopic node execution completed successfully")
-        return output1, output2, output3
+        return output1, output2, output3, model_output
