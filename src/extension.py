@@ -12,10 +12,12 @@ import utils.knutils as kutil
 LOGGER = logging.getLogger(__name__)
 
 
-@knext.node(name="Topic Extractor (BERTopic)", 
-            node_type=knext.NodeType.LEARNER, 
-            icon_path="icons/icon.png", 
-            category="/Other Data Types/Text Processing/Mining")
+@knext.node(
+    name="Topic Extractor (BERTopic)",
+    node_type=knext.NodeType.LEARNER,
+    icon_path="icons/icon.png",
+    category="/Other Data Types/Text Processing/Mining",
+)
 @knext.input_table(name="Input Table", description="Table containing the text column for topic modeling.")
 @knext.output_table(name="Document-Topic Probabilities", description="Document-topic distribution with probabilities and coherence scores.")
 @knext.output_table(name="Word-Topic Probabilities", description="Topic-word probabilities for each topic with MMR optimization.")
