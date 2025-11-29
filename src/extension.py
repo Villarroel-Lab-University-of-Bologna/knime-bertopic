@@ -60,7 +60,7 @@ class BERTopicNode:
     """
 
     # Input column
-    text_column = knext.ColumnParameter("Document column", "Column containing input documents for topic modeling.")
+    text_column = knext.ColumnParameter("Document column", "Column containing input documents for topic modeling.", column_type=kutil.is_string())
 
     # === STAGE 1: DOCUMENT EMBEDDING ===
     embedding_method = knext.StringParameter(
@@ -158,7 +158,7 @@ class BERTopicNode:
         label="HDBSCAN Distance Metric",
         description="Distance metric for HDBSCAN. Euclidean is the default, but cosine may be better for text.",
         default_value="euclidean",
-        enum=["euclidean", "cosine", "manhattan"],
+        enum=["euclidean", "manhattan"],
         is_advanced=True,
     ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
@@ -183,7 +183,7 @@ class BERTopicNode:
         description="Calculate soft clustering probabilities for documents and create probability columns for each topic.",
         default_value=True,
         is_advanced=True,
-    ).rule(knext.OneOf(clustering_method, ["HDBSCAN"]), knext.Effect.HIDE)
+    ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
     top_k_words = knext.IntParameter(
         label="Top K words per topic",
@@ -338,12 +338,11 @@ class BERTopicNode:
 
         # --- Output 1: Documents + topics ---
         output_df = original_df.copy()
-        output_df["Topic"] = "-1"  # Default to outlier topic as string
+        output_df["Assigned topic"] = "-1"  # Default to outlier topic as string
 
         valid_indices = original_df[self.text_column].dropna().index
         topics_str = [str(t) for t in topics]
-        output_df.loc[valid_indices, "Topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
-
+        output_df.loc[valid_indices, "Assigned topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
         # Add the UMAP Coordinates to Output 1
         output_df["UMAP_X"] = None
         output_df["UMAP_Y"] = None
@@ -372,23 +371,22 @@ class BERTopicNode:
         if probabilities is not None:
             # Add a column for each topic's probability
             for topic_id in range(n_topics):
-                col_name = f"Topic_{topic_id}_Probability"
+                col_name = f"Topic {topic_id}"
                 output_df[col_name] = 0.0
 
             for idx, (doc_idx, prob_list) in enumerate(zip(valid_indices, probabilities)):
                 if prob_list is not None and len(prob_list) > 0:
                     for topic_id in range(n_topics):
                         if topic_id < len(prob_list):
-                            col_name = f"Topic_{topic_id}_Probability"
+                            col_name = f"Topic {topic_id}"
                             output_df.loc[doc_idx, col_name] = float(prob_list[topic_id])
 
             for topic_id in range(n_topics):
-                col_name = f"Topic_{topic_id}_Probability"
+                col_name = f"Topic {topic_id}"
                 output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
         # Enforce exact dtypes for main columns
-        output_df["Topic"] = output_df["Topic"].astype("object", copy=False)
-
+        output_df["Assigned topic"] = output_df["Assigned topic"].astype("object", copy=False)
         # Create the output table with the correct, dynamically-generated schema
         output1 = knext.Table.from_pandas(output_df)
 
