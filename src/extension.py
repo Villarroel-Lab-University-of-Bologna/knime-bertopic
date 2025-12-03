@@ -60,7 +60,7 @@ class BERTopicNode:
     """
 
     # Input column
-    text_column = knext.ColumnParameter("Document column", "Column containing input documents for topic modeling.", column_type=kutil.is_string)
+    text_column = knext.ColumnParameter("Document column", "Column containing input documents for topic modeling.", column_filter=kutil.is_string)
 
     # === STAGE 1: DOCUMENT EMBEDDING ===
     embedding_method = knext.StringParameter(
