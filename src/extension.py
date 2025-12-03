@@ -158,7 +158,7 @@ class BERTopicNode:
         label="HDBSCAN Distance Metric",
         description="Distance metric for HDBSCAN. Euclidean is the default, but cosine may be better for text.",
         default_value="euclidean",
-        enum=["euclidean", "manhattan"],
+        enum=["euclidean", "cosine"],
         is_advanced=True,
     ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
@@ -291,9 +291,9 @@ class BERTopicNode:
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
             hdbscan_model = hdbscan.HDBSCAN(
+                metric=self.hdbscan_metric,
                 min_cluster_size=self.min_cluster_size,
                 min_samples=ms,
-                metric=self.hdbscan_metric,
                 cluster_selection_method="eom",
                 prediction_data=True,
             )
