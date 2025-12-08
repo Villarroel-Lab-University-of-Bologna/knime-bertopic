@@ -121,8 +121,8 @@ class BERTopicNode:
     umap_metric = knext.StringParameter(
         label="UMAP Distance Metric",
         description="Distance metric for UMAP. Cosine is often best for text embeddings.",
-        default_value="cosine",
-        enum=["cosine", "euclidean", "manhattan"],
+        default_value="euclidean",
+        enum=["cosine", "euclidean"],
         is_advanced=True,
     ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
