@@ -290,12 +290,16 @@ class BERTopicNode:
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
+            hdbscan_algo = 'best'
+            if self.hdbscan_metric == 'cosine':
+                hdbscan_algo = 'generic'
             hdbscan_model = hdbscan.HDBSCAN(
                 metric=self.hdbscan_metric,
                 min_cluster_size=self.min_cluster_size,
                 min_samples=ms,
                 cluster_selection_method="eom",
                 prediction_data=True,
+                algorithm=hdbscan_algo
             )
             LOGGER.info(
                 f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
