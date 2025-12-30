@@ -305,7 +305,13 @@ class BERTopicNode:
             old_fit = hdbscan_model.fit
 
             def new_fit(X, y=None):
-                return old_fit(X.astype("float64"), y)
+                # Ensure float64 for generic algorithm
+                X_converted = X.astype("float64")
+                result = old_fit(X_converted, y)
+                # FORCE generation of prediction data if it's missing
+                if hdbscan_model.prediction_data is True:
+                    hdbscan_model.generate_prediction_data()
+                return result
 
             hdbscan_model.fit = new_fit
 
