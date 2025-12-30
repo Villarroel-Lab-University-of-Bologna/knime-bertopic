@@ -158,7 +158,7 @@ class BERTopicNode:
         label="HDBSCAN Distance Metric",
         description="Distance metric for HDBSCAN. Euclidean is the default, but cosine may be better for text.",
         default_value="euclidean",
-        enum=["euclidean", "cosine"],
+        enum=["euclidean", "manhattan"],
         is_advanced=True,
     ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
@@ -285,44 +285,23 @@ class BERTopicNode:
             )
             LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
-        # === CLUSTERING ===
+        # Clustering
         hdbscan_model = None
         cluster_model = None
+
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
-
-            # Determine algorithm: 'generic' is required for cosine
-            hdbscan_algo = "best"
-            if self.hdbscan_metric == "cosine":
-                hdbscan_algo = "generic"
-
             hdbscan_model = hdbscan.HDBSCAN(
                 metric=self.hdbscan_metric,
                 min_cluster_size=self.min_cluster_size,
                 min_samples=ms,
                 cluster_selection_method="eom",
                 prediction_data=True,
-                algorithm=hdbscan_algo,
             )
 
-            # --- CRITICAL FIXES FOR COSINE/GENERIC MODE ---
-            # Define a more robust wrapper for the fit method
-            original_hdbscan_fit = hdbscan_model.fit
-
-            def robust_fit(X, y=None):
-                # 1. Force float64 to prevent 'Buffer dtype mismatch'
-                X_64 = X.astype("float64")
-                # 2. Run the original fit
-                fit_result = original_hdbscan_fit(X_64, y)
-                # 3. FORCE generation of the prediction data required for probabilities
-                if hdbscan_model.prediction_data:
-                    hdbscan_model.generate_prediction_data()
-                return fit_result
-
-            # Bind the robust fit back to the model instance
-            hdbscan_model.fit = robust_fit
-
-            LOGGER.info(f"HDBSCAN configured with metric='{self.hdbscan_metric}' and algorithm='{hdbscan_algo}'")
+            LOGGER.info(
+                f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
+            )
         else:  # KMeans
             cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
