@@ -288,7 +288,6 @@ class BERTopicNode:
         # Clustering
         hdbscan_model = None
         cluster_model = None
-
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
             hdbscan_model = hdbscan.HDBSCAN(
