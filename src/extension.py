@@ -285,11 +285,13 @@ class BERTopicNode:
             )
             LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
-        # Clustering
+        # === CLUSTERING ===
         hdbscan_model = None
         cluster_model = None
         if self.clustering_method == "HDBSCAN":
             ms = None if self.min_samples == 1 else self.min_samples
+
+            # Determine algorithm: 'generic' is required for cosine
             hdbscan_algo = "best"
             if self.hdbscan_metric == "cosine":
                 hdbscan_algo = "generic"
@@ -302,22 +304,25 @@ class BERTopicNode:
                 prediction_data=True,
                 algorithm=hdbscan_algo,
             )
-            old_fit = hdbscan_model.fit
 
-            def new_fit(X, y=None):
-                # Ensure float64 for generic algorithm
-                X_converted = X.astype("float64")
-                result = old_fit(X_converted, y)
-                # FORCE generation of prediction data if it's missing
-                if hdbscan_model.prediction_data is True:
+            # --- CRITICAL FIXES FOR COSINE/GENERIC MODE ---
+            # Define a more robust wrapper for the fit method
+            original_hdbscan_fit = hdbscan_model.fit
+
+            def robust_fit(X, y=None):
+                # 1. Force float64 to prevent 'Buffer dtype mismatch'
+                X_64 = X.astype("float64")
+                # 2. Run the original fit
+                fit_result = original_hdbscan_fit(X_64, y)
+                # 3. FORCE generation of the prediction data required for probabilities
+                if hdbscan_model.prediction_data:
                     hdbscan_model.generate_prediction_data()
-                return result
+                return fit_result
 
-            hdbscan_model.fit = new_fit
+            # Bind the robust fit back to the model instance
+            hdbscan_model.fit = robust_fit
 
-            LOGGER.info(
-                f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
-            )
+            LOGGER.info(f"HDBSCAN configured with metric='{self.hdbscan_metric}' and algorithm='{hdbscan_algo}'")
         else:  # KMeans
             cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
@@ -345,14 +350,26 @@ class BERTopicNode:
         if representation_model is not None:
             bertopic_params["representation_model"] = representation_model
 
-        # Fit
+        # FIT BERTopic
         LOGGER.info("Fitting BERTopic model...")
         topic_model = BERTopic(**bertopic_params)
-        if self.calculate_probabilities:
-            topics, probabilities = topic_model.fit_transform(documents)
-        else:
-            topics = topic_model.fit_transform(documents)
-            probabilities = None
+
+        try:
+            if self.calculate_probabilities:
+                # If this still fails with AttributeError, it's due to HDBSCAN's generic implementation
+                topics, probabilities = topic_model.fit_transform(documents)
+            else:
+                topics = topic_model.fit_transform(documents)
+                probabilities = None
+        except AttributeError as e:
+            if "prediction_data" in str(e) and self.hdbscan_metric == "cosine":
+                LOGGER.warning("HDBSCAN generic algorithm failed to provide prediction data. Retrying without probabilities.")
+                # Fallback: Fit without probabilities if the membership vectors fail
+                topic_model.calculate_probabilities = False
+                topics = topic_model.fit_transform(documents)
+                probabilities = None
+            else:
+                raise e
 
         # --- Output 1: Documents + topics ---
         output_df = original_df.copy()
