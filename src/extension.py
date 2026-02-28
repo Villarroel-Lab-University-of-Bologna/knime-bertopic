@@ -282,6 +282,8 @@ class BERTopicNode:
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
                 random_state=self.random_state,
+                low_memory=False,
+                n_jobs=1,
             )
             LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
