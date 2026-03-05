@@ -267,7 +267,7 @@ class BERTopicNode:
         embeddings = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
-            embeddings = embedding_model.encode(documents, show_progress_bar=False)
+            embeddings = embedding_model.encode(documents, show_progress_bar=False, batch_size=32, convert_to_numpy=True)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
@@ -298,6 +298,7 @@ class BERTopicNode:
                 min_samples=ms,
                 cluster_selection_method="eom",
                 prediction_data=True,
+                core_dist_n_jobs=1,
             )
 
             LOGGER.info(
