@@ -12,7 +12,7 @@ pytest = "*"
 ruff = "*"
 knime-extension = "*"
 knime-python-base = "*"
-knime-python-versions = "5.*.*"
+knime-python-versions = "5.7.*"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = ">=0.17.3,<0.18"
 sentence-transformers = "*"
@@ -24,7 +24,7 @@ python-flair = "*"
 
 [feature.build.dependencies]
 python = "3.11.*"
-knime-extension-bundling = "5.*.*"
+knime-extension-bundling = "5.7.*"
 
 [feature.debug.dependencies]
 debugpy = "*"
