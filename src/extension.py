@@ -1,4 +1,7 @@
 import logging
+import random
+import numpy as np
+import torch
 import knime.extension as knext
 import pandas as pd
 from bertopic import BERTopic
@@ -246,6 +249,11 @@ class BERTopicNode:
         return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
+        random.seed(self.random_state)
+        np.random.seed(self.random_state)
+        torch.manual_seed(self.random_state)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(self.random_state)
         df = input_table.to_pandas()
         original_df = df.copy()
 
@@ -267,7 +275,7 @@ class BERTopicNode:
         embeddings = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model)
-            embeddings = embedding_model.encode(documents, show_progress_bar=False, batch_size=32, convert_to_numpy=True)
+            embeddings = embedding_model.encode(documents, show_progress_bar=False, batch_size=32, convert_to_numpy=True, normalize_embeddings=True)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
