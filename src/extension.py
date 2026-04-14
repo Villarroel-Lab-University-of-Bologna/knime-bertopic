@@ -1,7 +1,4 @@
 import logging
-import random
-import numpy as np
-import torch
 import knime.extension as knext
 import pandas as pd
 from bertopic import BERTopic
