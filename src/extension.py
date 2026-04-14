@@ -249,11 +249,11 @@ class BERTopicNode:
         return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
-        random.seed(self.random_state)
-        np.random.seed(self.random_state)
-        torch.manual_seed(self.random_state)
+        random.seed(123)
+        np.random.seed(123)
+        torch.manual_seed(123)
         if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(self.random_state)
+            torch.cuda.manual_seed_all(123)
         df = input_table.to_pandas()
         original_df = df.copy()
 
@@ -289,7 +289,7 @@ class BERTopicNode:
                 n_neighbors=self.umap_n_neighbors,
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
-                random_state=self.random_state,
+                random_state=123,
                 low_memory=False,
                 n_jobs=1,
             )
@@ -313,7 +313,7 @@ class BERTopicNode:
                 f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
             )
         else:  # KMeans
-            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=self.random_state)
+            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=123)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
 
         # Representation (MMR)
@@ -375,7 +375,7 @@ class BERTopicNode:
             LOGGER.info("Generating 2D UMAP coordinates for visualization.")
             # Use a dedicated UMAP model for 2D visualization (fixed n_components=2)
             umap_model_vis_2d = UMAP(
-                n_components=2, n_neighbors=self.umap_n_neighbors, min_dist=self.umap_min_dist, metric="cosine", random_state=self.random_state
+                n_components=2, n_neighbors=self.umap_n_neighbors, min_dist=self.umap_min_dist, metric="cosine", random_state=123
             )
             umap_2d_coords = umap_model_vis_2d.fit_transform(embeddings)
 
