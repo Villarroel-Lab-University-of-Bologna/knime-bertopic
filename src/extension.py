@@ -197,10 +197,6 @@ class BERTopicNode:
         is_advanced=True,
     )
 
-    random_state = knext.IntParameter(
-        label="Random state", description="Random seed for reproducible results.", default_value=42, min_value=0, is_advanced=True
-    )
-
     def configure(self, exec_context: knext.ExecutionContext, input_schema: knext.Schema):
         # Validate that text column is selected
         if self.text_column is None:
@@ -249,11 +245,6 @@ class BERTopicNode:
         return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
-        random.seed(123)
-        np.random.seed(123)
-        torch.manual_seed(123)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(123)
         df = input_table.to_pandas()
         original_df = df.copy()
 
