@@ -287,7 +287,7 @@ class BERTopicNode:
                 n_neighbors=self.umap_n_neighbors,
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
-                random_state=42,
+                random_state=SEED,
                 low_memory=False,
                 n_jobs=1,
             )
