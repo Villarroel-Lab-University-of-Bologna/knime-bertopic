@@ -91,15 +91,6 @@ class BERTopicNode:
         default_value=True,
     )
 
-    umap_n_components = knext.IntParameter(
-        label="UMAP components",
-        description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
-        default_value=2,
-        min_value=2,
-        max_value=100,
-        is_advanced=True,
-    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
-
     umap_n_neighbors = knext.IntParameter(
         label="UMAP neighbors",
         description="Number of neighbors for UMAP. Higher values preserve global structure, lower values preserve local structure.",
@@ -273,7 +264,7 @@ class BERTopicNode:
         umap_model = None
         if self.use_umap and embeddings is not None:
             umap_model = UMAP(
-                n_components=self.umap_n_components,
+                n_components=2,  # Fixed to 2 for visualization; BERTopic will handle dimensionality internally
                 n_neighbors=self.umap_n_neighbors,
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
@@ -281,7 +272,7 @@ class BERTopicNode:
                 low_memory=False,
                 n_jobs=1,
             )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
+            LOGGER.info(f"UMAP configured with 2 components and metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -361,9 +352,7 @@ class BERTopicNode:
 
         if embeddings is not None:
             LOGGER.info("Generating 2D UMAP coordinates for visualization.")
-            # Use a dedicated UMAP model for 2D visualization (fixed n_components=2)
-            umap_model_vis_2d = UMAP(n_components=2, n_neighbors=self.umap_n_neighbors, min_dist=self.umap_min_dist, metric="cosine", random_state=42)
-            umap_2d_coords = umap_model_vis_2d.fit_transform(embeddings)
+            umap_2d_coords = umap_model.fit_transform(embeddings)
 
             # Assign UMAP coordinates to valid indices
             output_df.loc[valid_indices, "UMAP_X"] = umap_2d_coords[:, 0]
