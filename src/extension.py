@@ -362,9 +362,7 @@ class BERTopicNode:
         if embeddings is not None:
             LOGGER.info("Generating 2D UMAP coordinates for visualization.")
             # Use a dedicated UMAP model for 2D visualization (fixed n_components=2)
-            umap_model_vis_2d = UMAP(
-                n_components=2, n_neighbors=self.umap_n_neighbors, min_dist=self.umap_min_dist, metric="cosine", random_state=42
-            )
+            umap_model_vis_2d = UMAP(n_components=2, n_neighbors=self.umap_n_neighbors, min_dist=self.umap_min_dist, metric="cosine", random_state=42)
             umap_2d_coords = umap_model_vis_2d.fit_transform(embeddings)
 
             # Assign UMAP coordinates to valid indices
