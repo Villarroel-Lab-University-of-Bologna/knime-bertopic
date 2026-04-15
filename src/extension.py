@@ -1,5 +1,7 @@
 import logging
+import random
 import knime.extension as knext
+import numpy as np
 import pandas as pd
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
@@ -90,6 +92,15 @@ class BERTopicNode:
         description="Enable UMAP for dimensionality reduction before clustering (recommended for optimal results).",
         default_value=True,
     )
+
+    umap_n_components = knext.IntParameter(
+        label="UMAP components",
+        description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
+        default_value=2,
+        min_value=2,
+        max_value=100,
+        is_advanced=True,
+    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP neighbors",
@@ -226,13 +237,15 @@ class BERTopicNode:
             ]
         )
         # === Output 4: Model port ===
-        # For object ports, we typically return None as the port spec
-        # The actual port type is defined in the decorator
         model_port_spec = None
 
         return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
+        SEED = 42
+        random.seed(SEED)
+        np.random.seed(SEED)
+
         df = input_table.to_pandas()
         original_df = df.copy()
 
@@ -253,8 +266,14 @@ class BERTopicNode:
         vectorizer_model = None
         embeddings = None
         if self.embedding_method == "SentenceTransformers":
-            embedding_model = SentenceTransformer(self.sentence_transformer_model)
-            embeddings = embedding_model.encode(documents, show_progress_bar=False, batch_size=32, convert_to_numpy=True, normalize_embeddings=True)
+            embedding_model = SentenceTransformer(self.sentence_transformer_model, device="cpu")
+            embeddings = embedding_model.encode(
+                documents,
+                show_progress_bar=False,
+                batch_size=32,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:  # TF-IDF
             vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
@@ -264,7 +283,7 @@ class BERTopicNode:
         umap_model = None
         if self.use_umap and embeddings is not None:
             umap_model = UMAP(
-                n_components=2,  # Fixed to 2 for visualization; BERTopic will handle dimensionality internally
+                n_components=self.umap_n_components,
                 n_neighbors=self.umap_n_neighbors,
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
@@ -272,7 +291,7 @@ class BERTopicNode:
                 low_memory=False,
                 n_jobs=1,
             )
-            LOGGER.info(f"UMAP configured with 2 components and metric='{self.umap_metric}'")
+            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -292,7 +311,7 @@ class BERTopicNode:
                 f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
             )
         else:  # KMeans
-            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=42)
+            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=SEED)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
 
         # Representation (MMR)
@@ -303,8 +322,12 @@ class BERTopicNode:
             representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
 
-        # Build BERTopic params
-        bertopic_params = {"calculate_probabilities": self.calculate_probabilities, "min_topic_size": self.min_cluster_size, "verbose": True}
+        #  Assemble BERTopic params
+        bertopic_params = {
+            "calculate_probabilities": self.calculate_probabilities,
+            "min_topic_size": self.min_cluster_size,
+            "verbose": True,
+        }
         if embedding_model is not None:
             bertopic_params["embedding_model"] = embedding_model
         if vectorizer_model is not None:
@@ -324,7 +347,6 @@ class BERTopicNode:
 
         try:
             if self.calculate_probabilities:
-                # If this still fails with AttributeError, it's due to HDBSCAN's generic implementation
                 topics, probabilities = topic_model.fit_transform(documents)
             else:
                 topics = topic_model.fit_transform(documents)
@@ -332,33 +354,37 @@ class BERTopicNode:
         except AttributeError as e:
             if "prediction_data" in str(e) and self.hdbscan_metric == "cosine":
                 LOGGER.warning("HDBSCAN generic algorithm failed to provide prediction data. Retrying without probabilities.")
-                # Fallback: Fit without probabilities if the membership vectors fail
                 topic_model.calculate_probabilities = False
                 topics = topic_model.fit_transform(documents)
                 probabilities = None
             else:
                 raise e
 
-        # --- Output 1: Documents + topics ---
+        # Output 1: Documents + topics
         output_df = original_df.copy()
-        output_df["Assigned topic"] = "-1"  # Default to outlier topic as string
+        output_df["Assigned topic"] = "-1"
 
         valid_indices = original_df[self.text_column].dropna().index
         topics_str = [str(t) for t in topics]
         output_df.loc[valid_indices, "Assigned topic"] = pd.Series(topics_str, index=valid_indices, dtype="object").values
-        # Add the UMAP Coordinates to Output 1
         output_df["UMAP_X"] = None
         output_df["UMAP_Y"] = None
 
         if embeddings is not None:
-            LOGGER.info("Generating 2D UMAP coordinates for visualization.")
-            umap_2d_coords = umap_model.fit_transform(embeddings)
+            LOGGER.info("Generating 2D UMAP coordinates for visualization (separate model).")
+            umap_viz = UMAP(
+                n_components=2,
+                n_neighbors=self.umap_n_neighbors,
+                min_dist=self.umap_min_dist,
+                metric=self.umap_metric,
+                random_state=SEED,  # Same seed → same 2D layout every run
+                low_memory=False,
+                n_jobs=1,  # Deterministic
+            )
+            umap_2d_coords = umap_viz.fit_transform(embeddings)
 
-            # Assign UMAP coordinates to valid indices
             output_df.loc[valid_indices, "UMAP_X"] = umap_2d_coords[:, 0]
             output_df.loc[valid_indices, "UMAP_Y"] = umap_2d_coords[:, 1]
-
-            # Ensure proper dtypes
             output_df["UMAP_X"] = output_df["UMAP_X"].astype("float64", copy=False)
             output_df["UMAP_Y"] = output_df["UMAP_Y"].astype("float64", copy=False)
 
@@ -389,21 +415,20 @@ class BERTopicNode:
         # Create the output table with the correct, dynamically-generated schema
         output1 = knext.Table.from_pandas(output_df)
 
-        # --- Output 2: Topic-word probabilities ---
+        # Output 2: Topic-word probabilities
         topic_words_data = []
         all_topics = topic_model.get_topics()
 
         for topic_id, words in all_topics.items():
             if topic_id == -1:
-                continue  # skip outliers
+                continue
 
             for rank, (word, prob) in enumerate(words[: self.top_k_words], 1):
                 row_data = {"Topic_ID": str(topic_id), "Word": str(word), "Probability": float(prob), "Word_Rank": int(rank)}
                 if self.use_mmr:
-                    # In a full implementation, MMR scores should be a separate output,
-                    # here we use a placeholder since get_topics() doesn't return MMR directly.
                     row_data["MMR_Score"] = float(prob)
                 topic_words_data.append(row_data)
+
         if topic_words_data:
             topic_words_df = pd.DataFrame(topic_words_data)
             topic_words_df = topic_words_df.astype({"Topic_ID": "object", "Word": "object", "Probability": "float64", "Word_Rank": "int32"})
@@ -422,12 +447,12 @@ class BERTopicNode:
 
         output2 = knext.Table.from_pandas(topic_words_df)
 
-        # --- Output 3: Topic information ---
+        # Output 3: Topic information
         topic_details_data = []
         n_docs = len(documents)
         for topic_id in all_topics.keys():
             if topic_id == -1:
-                continue  # skip outliers
+                continue
 
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
@@ -477,8 +502,7 @@ class BERTopicNode:
 
         output3 = knext.Table.from_pandas(topic_details_df)
 
-        # --- Output 4: BERTopic Model ---
-        # Wrap the trained model using the custom port type
+        # Output 4: BERTopic Model
         model_spec = kutil.BERTopicModelObjectSpec(
             text_column_name=self.text_column,
             n_topics=n_topics,
