@@ -1,5 +1,6 @@
 import logging
 import random
+import torch
 import knime.extension as knext
 import numpy as np
 import pandas as pd
@@ -246,6 +247,11 @@ class BERTopicNode:
         random.seed(SEED)
         np.random.seed(SEED)
 
+        torch.manual_seed(SEED)
+        torch.cuda.manual_seed_all(SEED)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
         df = input_table.to_pandas()
         original_df = df.copy()
 
@@ -305,6 +311,7 @@ class BERTopicNode:
                 cluster_selection_method="eom",
                 prediction_data=True,
                 core_dist_n_jobs=1,
+                approx_min_span_tree=False,
             )
 
             LOGGER.info(
