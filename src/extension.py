@@ -378,17 +378,13 @@ class BERTopicNode:
         output_df["UMAP_Y"] = None
 
         if embeddings is not None:
-            LOGGER.info("Generating 2D UMAP coordinates for visualization (separate model).")
-            umap_viz = UMAP(
-                n_components=2,
-                n_neighbors=self.umap_n_neighbors,
-                min_dist=self.umap_min_dist,
-                metric=self.umap_metric,
-                random_state=SEED,  # Same seed → same 2D layout every run
-                low_memory=False,
-                n_jobs=1,  # Deterministic
-            )
-            umap_2d_coords = umap_viz.fit_transform(embeddings)
+            fitted_umap = topic_model.umap_model
+            if self.umap_n_components == 2:
+                LOGGER.info("Reusing 2D UMAP coordinates from the fitted BERTopic model (umap_n_components=2).")
+                umap_2d_coords = fitted_umap.embedding_
+            else:
+                LOGGER.info("Projecting embeddings to 2D via fitted UMAP transform (umap_n_components > 2).")
+                umap_2d_coords = fitted_umap.transform(embeddings)
 
             output_df.loc[valid_indices, "UMAP_X"] = umap_2d_coords[:, 0]
             output_df.loc[valid_indices, "UMAP_Y"] = umap_2d_coords[:, 1]
