@@ -306,7 +306,6 @@ class BERTopicNode:
                 metric=self.umap_metric,
                 random_state=SEED,
                 transform_seed=SEED,
-                init="random",
                 low_memory=False,
                 n_jobs=1,
                 densmap=False,
@@ -327,7 +326,6 @@ class BERTopicNode:
                 prediction_data=True,
                 core_dist_n_jobs=1,
                 approx_min_span_tree=False,
-                algorithm="generic",
             )
 
             LOGGER.info(
