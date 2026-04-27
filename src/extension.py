@@ -306,14 +306,10 @@ class BERTopicNode:
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
                 random_state=SEED,
-                transform_seed=SEED,
-                init="random",
                 low_memory=False,
                 n_jobs=1,
-                densmap=False,
-                verbose=False,
             )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components, init='random', metric='{self.umap_metric}'")
+            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -328,7 +324,6 @@ class BERTopicNode:
                 prediction_data=True,
                 core_dist_n_jobs=1,
                 approx_min_span_tree=False,
-                algorithm="generic",
             )
 
             LOGGER.info(
