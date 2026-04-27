@@ -347,6 +347,7 @@ class BERTopicNode:
 
         # Step 5 (BERTopic algorithm): c-TF-IDF weighting scheme.
         from bertopic.vectorizers import ClassTfidfTransformer
+
         ctfidf_model = ClassTfidfTransformer(reduce_frequent_words=True)
         LOGGER.info("ClassTfidfTransformer configured for topic weighting (step 5)")
 
