@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import torch
 import knime.extension as knext
@@ -79,10 +80,7 @@ class BERTopicNode:
         default_value="all-MiniLM-L6-v2",
         enum=[
             "all-MiniLM-L6-v2",
-            "all-mpnet-base-v2",
             "paraphrase-multilingual-MiniLM-L12-v2",
-            "distilbert-base-nli-mean-tokens",
-            "paraphrase-distilroberta-base-v1",
         ],
         is_advanced=True,
     ).rule(knext.OneOf(embedding_method, ["TF-IDF"]), knext.Effect.HIDE)
@@ -244,6 +242,14 @@ class BERTopicNode:
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
         SEED = 42
+
+        os.environ["PYTHONHASHSEED"] = str(SEED)
+        os.environ["OMP_NUM_THREADS"] = "1"
+        os.environ["MKL_NUM_THREADS"] = "1"
+        os.environ["OPENBLAS_NUM_THREADS"] = "1"
+        os.environ["NUMEXPR_NUM_THREADS"] = "1"
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
         random.seed(SEED)
         np.random.seed(SEED)
 
@@ -251,6 +257,9 @@ class BERTopicNode:
         torch.cuda.manual_seed_all(SEED)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+        torch.use_deterministic_algorithms(True, warn_only=True)
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
 
         df = input_table.to_pandas()
         original_df = df.copy()
@@ -269,21 +278,24 @@ class BERTopicNode:
 
         # Set up embedding model
         embedding_model = None
-        vectorizer_model = None
         embeddings = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model, device="cpu")
-            embeddings = embedding_model.encode(
-                documents,
-                show_progress_bar=False,
-                batch_size=32,
-                convert_to_numpy=True,
-                normalize_embeddings=True,
-            )
+            embedding_model.eval()
+            with torch.no_grad():
+                embeddings = embedding_model.encode(
+                    documents,
+                    show_progress_bar=False,
+                    batch_size=1,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                )
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
-        else:  # TF-IDF
-            vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
+        else:
             LOGGER.info("Using TF-IDF vectorization")
+
+        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
+        LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
         # UMAP
         umap_model = None
@@ -294,10 +306,14 @@ class BERTopicNode:
                 min_dist=self.umap_min_dist,
                 metric=self.umap_metric,
                 random_state=SEED,
+                transform_seed=SEED,
+                init="random",
                 low_memory=False,
                 n_jobs=1,
+                densmap=False,
+                verbose=False,
             )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
+            LOGGER.info(f"UMAP configured with {self.umap_n_components} components, init='random', metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -312,6 +328,7 @@ class BERTopicNode:
                 prediction_data=True,
                 core_dist_n_jobs=1,
                 approx_min_span_tree=False,
+                algorithm="generic",
             )
 
             LOGGER.info(
@@ -329,16 +346,22 @@ class BERTopicNode:
             representation_model = MaximalMarginalRelevance(diversity=self.mmr_diversity)
             LOGGER.info(f"MMR enabled with diversity={self.mmr_diversity}")
 
+        # Step 5 (BERTopic algorithm): c-TF-IDF weighting scheme.
+        from bertopic.vectorizers import ClassTfidfTransformer
+
+        ctfidf_model = ClassTfidfTransformer(reduce_frequent_words=True)
+        LOGGER.info("ClassTfidfTransformer configured for topic weighting (step 5)")
+
         #  Assemble BERTopic params
         bertopic_params = {
             "calculate_probabilities": self.calculate_probabilities,
             "min_topic_size": self.min_cluster_size,
             "verbose": True,
+            "vectorizer_model": vectorizer_model,
+            "ctfidf_model": ctfidf_model,
         }
         if embedding_model is not None:
             bertopic_params["embedding_model"] = embedding_model
-        if vectorizer_model is not None:
-            bertopic_params["vectorizer_model"] = vectorizer_model
         if umap_model is not None:
             bertopic_params["umap_model"] = umap_model
         if hdbscan_model is not None:
@@ -351,6 +374,9 @@ class BERTopicNode:
         # FIT BERTopic
         LOGGER.info("Fitting BERTopic model...")
         topic_model = BERTopic(**bertopic_params)
+
+        np.random.seed(SEED)
+        random.seed(SEED)
 
         try:
             if self.calculate_probabilities:
