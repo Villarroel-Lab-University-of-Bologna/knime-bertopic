@@ -289,6 +289,7 @@ class BERTopicNode:
                     convert_to_numpy=True,
                     normalize_embeddings=True,
                 )
+            embeddings = embeddings.astype(np.float64)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:
             LOGGER.info("Using TF-IDF vectorization")
