@@ -242,7 +242,6 @@ class BERTopicNode:
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
         SEED = 42
-
         os.environ["PYTHONHASHSEED"] = str(SEED)
         os.environ["OMP_NUM_THREADS"] = "1"
         os.environ["MKL_NUM_THREADS"] = "1"
@@ -348,7 +347,6 @@ class BERTopicNode:
 
         # Step 5 (BERTopic algorithm): c-TF-IDF weighting scheme.
         from bertopic.vectorizers import ClassTfidfTransformer
-
         ctfidf_model = ClassTfidfTransformer(reduce_frequent_words=True)
         LOGGER.info("ClassTfidfTransformer configured for topic weighting (step 5)")
 
@@ -378,17 +376,19 @@ class BERTopicNode:
         np.random.seed(SEED)
         random.seed(SEED)
 
+        if embeddings is not None:
+            embeddings = embeddings.astype(np.float64)
         try:
             if self.calculate_probabilities:
-                topics, probabilities = topic_model.fit_transform(documents)
+                topics, probabilities = topic_model.fit_transform(documents, embeddings)
             else:
-                topics = topic_model.fit_transform(documents)
+                topics = topic_model.fit_transform(documents, embeddings)
                 probabilities = None
         except AttributeError as e:
             if "prediction_data" in str(e) and self.hdbscan_metric == "cosine":
                 LOGGER.warning("HDBSCAN generic algorithm failed to provide prediction data. Retrying without probabilities.")
                 topic_model.calculate_probabilities = False
-                topics = topic_model.fit_transform(documents)
+                topics = topic_model.fit_transform(documents, embeddings)
                 probabilities = None
             else:
                 raise e
