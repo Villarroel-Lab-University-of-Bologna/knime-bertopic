@@ -289,8 +289,6 @@ class BERTopicNode:
                     convert_to_numpy=True,
                     normalize_embeddings=True,
                 )
-            # Cast to float32 so UMAP output and HDBSCAN input share the same dtype
-            embeddings = embeddings.astype(np.float32)
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:
             LOGGER.info("Using TF-IDF vectorization")
@@ -331,6 +329,7 @@ class BERTopicNode:
                 approx_min_span_tree=False,
                 algorithm="generic",
             )
+
             LOGGER.info(
                 f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
             )
@@ -380,15 +379,15 @@ class BERTopicNode:
 
         try:
             if self.calculate_probabilities:
-                topics, probabilities = topic_model.fit_transform(documents, embeddings)
+                topics, probabilities = topic_model.fit_transform(documents)
             else:
-                topics, _ = topic_model.fit_transform(documents, embeddings)
+                topics = topic_model.fit_transform(documents)
                 probabilities = None
         except AttributeError as e:
             if "prediction_data" in str(e) and self.hdbscan_metric == "cosine":
                 LOGGER.warning("HDBSCAN generic algorithm failed to provide prediction data. Retrying without probabilities.")
                 topic_model.calculate_probabilities = False
-                topics, _ = topic_model.fit_transform(documents, embeddings)
+                topics = topic_model.fit_transform(documents)
                 probabilities = None
             else:
                 raise e
