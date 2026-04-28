@@ -277,19 +277,17 @@ class BERTopicNode:
 
         # Set up embedding model
         embedding_model = None
+        vectorizer_model = None
         embeddings = None
         if self.embedding_method == "SentenceTransformers":
             embedding_model = SentenceTransformer(self.sentence_transformer_model, device="cpu")
-            embedding_model.eval()
-            with torch.no_grad():
-                embeddings = embedding_model.encode(
-                    documents,
-                    show_progress_bar=False,
-                    batch_size=1,
-                    convert_to_numpy=True,
-                    normalize_embeddings=True,
-                )
-            embeddings = embeddings.astype(np.float64)
+            embeddings = embedding_model.encode(
+                documents,
+                show_progress_bar=False,
+                batch_size=32,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+            )
             LOGGER.info(f"Using embedding model: {self.sentence_transformer_model}")
         else:
             LOGGER.info("Using TF-IDF vectorization")
