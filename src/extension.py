@@ -281,7 +281,7 @@ class BERTopicNode:
         os.environ["OPENBLAS_NUM_THREADS"] = "1"
         os.environ["NUMEXPR_NUM_THREADS"] = "1"
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        os.environ["NUMBA_NUM_THREADS"] = "1"  # Ensures UMAP's Numba JIT is single-threaded
+        os.environ["NUMBA_NUM_THREADS"] = "1"
 
         random.seed(SEED)
         np.random.seed(SEED)
@@ -330,13 +330,11 @@ class BERTopicNode:
         LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
         # === DIMENSIONALITY REDUCTION ===
-        umap_model = None  # will hold whichever reduction model is used (UMAP or PCA wrapper)
+        umap_model = None
 
         if self.use_dim_reduction and embeddings is not None:
             if self.dim_reduction_method == "PCA":
                 # PCA is fully deterministic across all platforms and operating systems.
-                # Unlike UMAP, it does not use Numba JIT or stochastic gradient descent,
-                # so results are identical on Windows, macOS, and Linux.
                 n_components = min(self.pca_n_components, len(documents) - 1, embeddings.shape[1])
                 umap_model = PCA(
                     n_components=n_components,
@@ -351,6 +349,7 @@ class BERTopicNode:
                     min_dist=self.umap_min_dist,
                     metric=self.umap_metric,
                     random_state=SEED,
+                    transform_seed=SEED,
                     low_memory=False,
                     n_jobs=1,
                 )
