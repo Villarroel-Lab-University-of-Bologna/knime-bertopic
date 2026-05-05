@@ -8,6 +8,7 @@ import pandas as pd
 from bertopic import BERTopic
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import CountVectorizer
 from umap import UMAP
 import hdbscan
@@ -42,8 +43,8 @@ class BERTopicNode:
     - **Document Embedding (Stage 1)**: Uses pre-trained transformer models (BERT/SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
     [More info](https://www.sbert.net/)
 
-    - **UMAP Dimensionality Reduction (Stage 2)**: Applies Uniform Manifold Approximation and Projection to reduce embedding dimensions while preserving local and global structure, optimizing the data for effective clustering.
-    [More info](https://umap-learn.readthedocs.io/)
+    - **Dimensionality Reduction (Stage 2)**: Applies either UMAP (Uniform Manifold Approximation and Projection) or PCA (Principal Component Analysis) to reduce embedding dimensions while preserving structure. UMAP gives better topic quality; PCA gives full reproducibility across different operating systems and hardware.
+    [UMAP info](https://umap-learn.readthedocs.io/) | [PCA info](https://scikit-learn.org/stable/modules/decomposition.html#pca)
 
     - **HDBSCAN Clustering (Stage 3)**: Employs hierarchical density-based clustering to automatically discover the optimal number of topics, effectively handling noise and outliers without requiring manual cluster specification.
     [More info](https://hdbscan.readthedocs.io/)
@@ -51,13 +52,17 @@ class BERTopicNode:
     ### How It Works:
     1. **Document Embedding**: The node converts text documents into high-dimensional vector representations using the selected embedding method (BERT-based transformers or TF-IDF).
 
-    2. **Dimensionality Reduction**: UMAP reduces the high-dimensional embeddings to a lower-dimensional space while preserving semantic structure and relationships between documents.
+    2. **Dimensionality Reduction**: UMAP or PCA reduces the high-dimensional embeddings to a lower-dimensional space while preserving semantic structure and relationships between documents.
 
     3. **Density-Based Clustering**: HDBSCAN analyzes the reduced embeddings to identify dense regions representing coherent topics, automatically determining optimal cluster numbers without manual specification.
 
     4. **Topic Representation**: c-TF-IDF generates topic representations by treating each cluster as a single document, with optional MMR optimization to balance word relevance and diversity for improved coherence and interpretability.
 
     5. **Output Generation**: Three comprehensive tables are produced containing document-topic assignments, detailed word-topic probabilities with coherence scores, and topic metadata including statistical summaries and representative documents.
+
+    ### UMAP vs PCA:
+    - **UMAP**: Better topic quality, preserves non-linear structure, recommended for exploratory analysis. Results may vary slightly across different operating systems due to hardware-level floating-point differences.
+    - **PCA**: Fully reproducible across all platforms and hardware. Recommended when consistent, identical results are required across different machines or operating systems.
 
     Research by Huang et al. (2024) validates this integrated pipeline's effectiveness in extracting coherent topics from domain-specific text collections, demonstrating superior performance in capturing fine-grained semantic aspects that traditional topic modeling approaches often miss.
 
@@ -86,12 +91,26 @@ class BERTopicNode:
     ).rule(knext.OneOf(embedding_method, ["TF-IDF"]), knext.Effect.HIDE)
 
     # === STAGE 2: DIMENSIONALITY REDUCTION ===
-    use_umap = knext.BoolParameter(
-        label="Use UMAP dimensionality reduction",
-        description="Enable UMAP for dimensionality reduction before clustering (recommended for optimal results).",
+    use_dim_reduction = knext.BoolParameter(
+        label="Use dimensionality reduction",
+        description="Enable dimensionality reduction before clustering (recommended for optimal results).",
         default_value=True,
     )
 
+    dim_reduction_method = knext.StringParameter(
+        label="Dimensionality reduction method",
+        description=(
+            "Algorithm used to reduce embedding dimensions before clustering.\n\n"
+            "• UMAP: Better topic quality, preserves non-linear structure. "
+            "Results may vary slightly across different operating systems.\n\n"
+            "• PCA: Fully reproducible across all platforms and hardware. "
+            "Recommended when consistent results across different machines are required."
+        ),
+        default_value="UMAP",
+        enum=["UMAP", "PCA"],
+    ).rule(knext.OneOf(use_dim_reduction, [False]), knext.Effect.HIDE)
+
+    # --- UMAP parameters ---
     umap_n_components = knext.IntParameter(
         label="UMAP components",
         description="Number of dimensions for UMAP reduction. Lower values improve clustering but may lose semantic information.",
@@ -99,7 +118,7 @@ class BERTopicNode:
         min_value=2,
         max_value=100,
         is_advanced=True,
-    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
+    ).rule(knext.And(knext.OneOf(use_dim_reduction, [True]), knext.OneOf(dim_reduction_method, ["UMAP"])), knext.Effect.SHOW)
 
     umap_n_neighbors = knext.IntParameter(
         label="UMAP neighbors",
@@ -108,7 +127,7 @@ class BERTopicNode:
         min_value=2,
         max_value=200,
         is_advanced=True,
-    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
+    ).rule(knext.And(knext.OneOf(use_dim_reduction, [True]), knext.OneOf(dim_reduction_method, ["UMAP"])), knext.Effect.SHOW)
 
     umap_min_dist = knext.DoubleParameter(
         label="UMAP min distance",
@@ -117,7 +136,7 @@ class BERTopicNode:
         min_value=0.0,
         max_value=1.0,
         is_advanced=True,
-    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
+    ).rule(knext.And(knext.OneOf(use_dim_reduction, [True]), knext.OneOf(dim_reduction_method, ["UMAP"])), knext.Effect.SHOW)
 
     umap_metric = knext.StringParameter(
         label="UMAP Distance Metric",
@@ -125,7 +144,21 @@ class BERTopicNode:
         default_value="euclidean",
         enum=["cosine", "euclidean"],
         is_advanced=True,
-    ).rule(knext.OneOf(use_umap, [False]), knext.Effect.HIDE)
+    ).rule(knext.And(knext.OneOf(use_dim_reduction, [True]), knext.OneOf(dim_reduction_method, ["UMAP"])), knext.Effect.SHOW)
+
+    # --- PCA parameters ---
+    pca_n_components = knext.IntParameter(
+        label="PCA components",
+        description=(
+            "Number of principal components for PCA reduction. "
+            "Lower values reduce noise but may lose semantic information. "
+            "Use 2 for direct 2D visualization or higher values (e.g. 50) for better clustering quality."
+        ),
+        default_value=2,
+        min_value=2,
+        max_value=100,
+        is_advanced=True,
+    ).rule(knext.And(knext.OneOf(use_dim_reduction, [True]), knext.OneOf(dim_reduction_method, ["PCA"])), knext.Effect.SHOW)
 
     # === STAGE 3: CLUSTERING ===
     clustering_method = knext.StringParameter(
@@ -248,6 +281,7 @@ class BERTopicNode:
         os.environ["OPENBLAS_NUM_THREADS"] = "1"
         os.environ["NUMEXPR_NUM_THREADS"] = "1"
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["NUMBA_NUM_THREADS"] = "1"  # Ensures UMAP's Numba JIT is single-threaded
 
         random.seed(SEED)
         np.random.seed(SEED)
@@ -295,19 +329,32 @@ class BERTopicNode:
         vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=0.95)
         LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
-        # UMAP
-        umap_model = None
-        if self.use_umap and embeddings is not None:
-            umap_model = UMAP(
-                n_components=self.umap_n_components,
-                n_neighbors=self.umap_n_neighbors,
-                min_dist=self.umap_min_dist,
-                metric=self.umap_metric,
-                random_state=SEED,
-                low_memory=False,
-                n_jobs=1,
-            )
-            LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
+        # === DIMENSIONALITY REDUCTION ===
+        umap_model = None  # will hold whichever reduction model is used (UMAP or PCA wrapper)
+
+        if self.use_dim_reduction and embeddings is not None:
+            if self.dim_reduction_method == "PCA":
+                # PCA is fully deterministic across all platforms and operating systems.
+                # Unlike UMAP, it does not use Numba JIT or stochastic gradient descent,
+                # so results are identical on Windows, macOS, and Linux.
+                n_components = min(self.pca_n_components, len(documents) - 1, embeddings.shape[1])
+                umap_model = PCA(
+                    n_components=n_components,
+                    random_state=SEED,
+                )
+                LOGGER.info(f"PCA configured with {n_components} components (fully reproducible across all platforms)")
+
+            else:  # UMAP
+                umap_model = UMAP(
+                    n_components=self.umap_n_components,
+                    n_neighbors=self.umap_n_neighbors,
+                    min_dist=self.umap_min_dist,
+                    metric=self.umap_metric,
+                    random_state=SEED,
+                    low_memory=False,
+                    n_jobs=1,
+                )
+                LOGGER.info(f"UMAP configured with {self.umap_n_components} components and metric='{self.umap_metric}'")
 
         # Clustering
         hdbscan_model = None
@@ -397,16 +444,29 @@ class BERTopicNode:
         output_df["UMAP_Y"] = None
 
         if embeddings is not None:
-            fitted_umap = topic_model.umap_model
-            if self.umap_n_components == 2:
-                LOGGER.info("Reusing 2D UMAP coordinates from the fitted BERTopic model (umap_n_components=2).")
-                umap_2d_coords = fitted_umap.embedding_
+            fitted_reduction = topic_model.umap_model  # holds whichever model was used (UMAP or PCA)
+            is_pca = isinstance(fitted_reduction, PCA)
+
+            if is_pca or (not is_pca and self.umap_n_components == 2):
+                # PCA: always use transform() since it has no .embedding_ attribute.
+                # UMAP with 2 components: reuse the already-fitted 2D embedding directly.
+                if is_pca:
+                    LOGGER.info("Computing 2D PCA coordinates for visualisation.")
+                    # If PCA was fitted with >2 components, project down to 2D for the output columns.
+                    if fitted_reduction.n_components_ > 2:
+                        pca_2d = PCA(n_components=2, random_state=SEED)
+                        coords_2d = pca_2d.fit_transform(embeddings)
+                    else:
+                        coords_2d = fitted_reduction.transform(embeddings)
+                else:
+                    LOGGER.info("Reusing 2D UMAP coordinates from the fitted BERTopic model (umap_n_components=2).")
+                    coords_2d = fitted_reduction.embedding_
             else:
                 LOGGER.info("Projecting embeddings to 2D via fitted UMAP transform (umap_n_components > 2).")
-                umap_2d_coords = fitted_umap.transform(embeddings)
+                coords_2d = fitted_reduction.transform(embeddings)
 
-            output_df.loc[valid_indices, "UMAP_X"] = umap_2d_coords[:, 0]
-            output_df.loc[valid_indices, "UMAP_Y"] = umap_2d_coords[:, 1]
+            output_df.loc[valid_indices, "UMAP_X"] = coords_2d[:, 0]
+            output_df.loc[valid_indices, "UMAP_Y"] = coords_2d[:, 1]
             output_df["UMAP_X"] = output_df["UMAP_X"].astype("float64", copy=False)
             output_df["UMAP_Y"] = output_df["UMAP_Y"].astype("float64", copy=False)
 
