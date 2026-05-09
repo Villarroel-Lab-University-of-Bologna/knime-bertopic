@@ -1,5 +1,6 @@
 import logging
 import os
+os.environ["NUMBA_NUM_THREADS"] = "1"
 import random
 import torch
 import knime.extension as knext
@@ -281,7 +282,6 @@ class BERTopicNode:
         os.environ["OPENBLAS_NUM_THREADS"] = "1"
         os.environ["NUMEXPR_NUM_THREADS"] = "1"
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
-        os.environ["NUMBA_NUM_THREADS"] = "1"
 
         random.seed(SEED)
         np.random.seed(SEED)
