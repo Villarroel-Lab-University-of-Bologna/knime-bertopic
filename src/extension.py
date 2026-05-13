@@ -2,6 +2,12 @@ import logging
 import os
 
 os.environ["NUMBA_NUM_THREADS"] = "1"
+os.environ["PYTHONHASHSEED"] = "42"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import random
 import torch
 import knime.extension as knext
@@ -276,19 +282,11 @@ class BERTopicNode:
         return schema1, schema2, schema3, model_port_spec
 
     def execute(self, exec_context: knext.ExecutionContext, input_table):
-        SEED = 42
-        os.environ["PYTHONHASHSEED"] = str(SEED)
-        os.environ["OMP_NUM_THREADS"] = "1"
-        os.environ["MKL_NUM_THREADS"] = "1"
-        os.environ["OPENBLAS_NUM_THREADS"] = "1"
-        os.environ["NUMEXPR_NUM_THREADS"] = "1"
-        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        random.seed(42)
+        np.random.seed(42)
 
-        random.seed(SEED)
-        np.random.seed(SEED)
-
-        torch.manual_seed(SEED)
-        torch.cuda.manual_seed_all(SEED)
+        torch.manual_seed(42)
+        torch.cuda.manual_seed_all(42)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True, warn_only=True)
@@ -339,7 +337,7 @@ class BERTopicNode:
                 n_components = min(self.pca_n_components, len(documents) - 1, embeddings.shape[1])
                 umap_model = PCA(
                     n_components=n_components,
-                    random_state=SEED,
+                    random_state=42,
                 )
                 LOGGER.info(f"PCA configured with {n_components} components (fully reproducible across all platforms)")
 
@@ -349,8 +347,8 @@ class BERTopicNode:
                     n_neighbors=self.umap_n_neighbors,
                     min_dist=self.umap_min_dist,
                     metric=self.umap_metric,
-                    random_state=SEED,
-                    transform_seed=SEED,
+                    random_state=42,
+                    transform_seed=42,
                     low_memory=False,
                     n_jobs=1,
                 )
@@ -375,7 +373,7 @@ class BERTopicNode:
                 f"HDBSCAN configured with min_cluster_size={self.min_cluster_size}, min_samples={ms or 'auto'}, metric='{self.hdbscan_metric}'"
             )
         else:  # KMeans
-            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=SEED)
+            cluster_model = KMeans(n_clusters=self.n_clusters, random_state=42)
             LOGGER.info(f"KMeans configured with {self.n_clusters} clusters")
 
         # Representation (MMR)
@@ -415,8 +413,8 @@ class BERTopicNode:
         LOGGER.info("Fitting BERTopic model...")
         topic_model = BERTopic(**bertopic_params)
 
-        np.random.seed(SEED)
-        random.seed(SEED)
+        np.random.seed(42)
+        random.seed(42)
 
         try:
             if self.calculate_probabilities:
@@ -454,7 +452,7 @@ class BERTopicNode:
                     LOGGER.info("Computing 2D PCA coordinates for visualisation.")
                     # If PCA was fitted with >2 components, project down to 2D for the output columns.
                     if fitted_reduction.n_components_ > 2:
-                        pca_2d = PCA(n_components=2, random_state=SEED)
+                        pca_2d = PCA(n_components=2, random_state=42)
                         coords_2d = pca_2d.fit_transform(embeddings)
                     else:
                         coords_2d = fitted_reduction.transform(embeddings)
