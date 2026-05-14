@@ -130,7 +130,7 @@ class BERTopicNode:
     umap_n_neighbors = knext.IntParameter(
         label="UMAP neighbors",
         description="Number of neighbors for UMAP. Higher values preserve global structure, lower values preserve local structure.",
-        default_value=15,
+        default_value=10,
         min_value=2,
         max_value=200,
         is_advanced=True,
