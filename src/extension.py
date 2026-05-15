@@ -47,6 +47,7 @@ class BERTopicNode:
     Training parameters such as embedding models, UMAP components, and clustering methods can be customized. The minimum and maximum values for configuration options (like UMAP components or minimum topic size) are set based on algorithmic constraints and established best practices to ensure valid model training and highly interpretable results. The node features automatic topic number determination and incorporates Maximal Marginal Relevance (MMR) optimization to balance topic coherence with word diversity.
 
     The node implements a validated processing pipeline based on recent advances in topic modeling research:
+
     - **Document Embedding (Stage 1)**: Uses pre-trained transformer models (SentenceTransformers) to create high-dimensional semantic representations that capture contextual meaning and relationships between documents.
     [More info](https://www.sbert.net/)
 
@@ -324,7 +325,7 @@ class BERTopicNode:
         else:
             LOGGER.info("Using TF-IDF vectorization")
 
-        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=5, max_df=1.0, stop_words="english")
+        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=1.0, stop_words="english")
         LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
         # === DIMENSIONALITY REDUCTION ===
