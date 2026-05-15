@@ -324,7 +324,7 @@ class BERTopicNode:
         else:
             LOGGER.info("Using TF-IDF vectorization")
 
-        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=5, max_df=1.0)
+        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=5, max_df=1.0, stop_words="english")
         LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
         # === DIMENSIONALITY REDUCTION ===
@@ -410,13 +410,18 @@ class BERTopicNode:
 
         # FIT BERTopic
         LOGGER.info("Fitting BERTopic model...")
-        topic_model = BERTopic(**bertopic_params)
+        topic_model = BERTopic(**bertopic_params, nr_topics="auto")
 
         np.random.seed(42)
         random.seed(42)
 
+        # Force probabilities calculation if requested and strategy is "Distributions"
+        calc_probs = self.calculate_probabilities
+        if self.reduce_outliers_method == "Distributions":
+            calc_probs = True
+
         try:
-            if self.calculate_probabilities:
+            if calc_probs:
                 topics, probabilities = topic_model.fit_transform(documents)
             else:
                 topics = topic_model.fit_transform(documents)
@@ -430,6 +435,30 @@ class BERTopicNode:
             else:
                 raise e
 
+        # Track initial topics before outlier reduction for statistics
+        initial_topics = list(topics)
+
+        # === APPLY OUTLIER REDUCTION ===
+        if self.reduce_outliers_method != "None" and -1 in topics:
+            LOGGER.info(f"Applying outlier reduction using strategy: {self.reduce_outliers_method}")
+
+            if self.reduce_outliers_method == "c-TF-IDF":
+                # Strategy 1: Using c-TF-IDF representations
+                new_topics = topic_model.reduce_outliers(documents, topics, strategy="c-tf-idf")
+                topics = new_topics
+
+            elif self.reduce_outliers_method == "Distributions" and probabilities is not None:
+                # Strategy 2: Using calculation distributions (requires soft clustering probabilities)
+                new_topics = topic_model.reduce_outliers(
+                    documents, topics, strategy="probabilities", probabilities=probabilities, threshold=self.outlier_threshold
+                )
+                topics = new_topics
+            else:
+                LOGGER.warning("Outlier reduction skipped: Selected strategy requires calculated probabilities.")
+
+            # Update the model's internal topic assignments so output calculations align
+            topic_model.update_topics(documents, topics=topics)
+
         # Output 1: Documents + topics
         output_df = original_df.copy()
         output_df["Assigned topic"] = "-1"
@@ -441,15 +470,12 @@ class BERTopicNode:
         output_df["UMAP_Y"] = None
 
         if embeddings is not None:
-            fitted_reduction = topic_model.umap_model  # holds whichever model was used (UMAP or PCA)
+            fitted_reduction = topic_model.umap_model
             is_pca = isinstance(fitted_reduction, PCA)
 
             if is_pca or (not is_pca and self.umap_n_components == 2):
-                # PCA: always use transform() since it has no .embedding_ attribute.
-                # UMAP with 2 components: reuse the already-fitted 2D embedding directly.
                 if is_pca:
                     LOGGER.info("Computing 2D PCA coordinates for visualisation.")
-                    # If PCA was fitted with >2 components, project down to 2D for the output columns.
                     if fitted_reduction.n_components_ > 2:
                         pca_2d = PCA(n_components=2, random_state=42)
                         coords_2d = pca_2d.fit_transform(embeddings)
@@ -470,7 +496,7 @@ class BERTopicNode:
         topic_info = topic_model.get_topic_info()
         topic_info_without_outliers = topic_info[topic_info["Topic"] != -1]
         n_topics = len(topic_info_without_outliers)
-        LOGGER.info(f"Topic modeling completed. Found {n_topics} topics.")
+        LOGGER.info(f"Topic modeling completed. Found {n_topics} core topics.")
 
         if probabilities is not None:
             # Add a column for each topic's probability
@@ -529,23 +555,38 @@ class BERTopicNode:
         # Output 3: Topic information
         topic_details_data = []
         n_docs = len(documents)
-        for topic_id in all_topics.keys():
-            if topic_id == -1:
-                continue
+        all_topics = topic_model.get_topics()
 
+        # Gather all unique topic IDs present in the final model, ensuring -1 is checked
+        unique_topic_ids = list(all_topics.keys())
+        if -1 not in unique_topic_ids and -1 in initial_topics:
+            unique_topic_ids = [-1] + unique_topic_ids
+
+        for topic_id in unique_topic_ids:
+            # Post-reduction size and percentage
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
-            top_words_list = [w for (w, _) in all_topics[topic_id][: self.top_k_words]]
-            top_words_str = ", ".join(top_words_list)
-            topic_docs_idx = [i for i, t in enumerate(topics) if t == topic_id]
-            representative_doc = documents[topic_docs_idx[0]] if topic_docs_idx else ""
-            if len(representative_doc) > 200:
-                representative_doc = representative_doc[:200] + "..."
-            if all_topics[topic_id]:
-                top5 = all_topics[topic_id][:5]
-                coherence_score = float(sum(prob for _, prob in top5) / max(1, len(top5)))
-            else:
+
+            # Contextual sizing for outliers
+            if topic_id == -1:
+                initial_outliers = sum(1 for t in initial_topics if t == -1)
+                top_words_str = f"[OUTLIERS] - Initial: {initial_outliers} | Remaining: {topic_size}"
+                representative_doc = "N/A"
                 coherence_score = 0.0
+            else:
+                top_words_list = [w for (w, _) in all_topics[topic_id][: self.top_k_words]]
+                top_words_str = ", ".join(top_words_list)
+                topic_docs_idx = [i for i, t in enumerate(topics) if t == topic_id]
+                representative_doc = documents[topic_docs_idx[0]] if topic_docs_idx else ""
+
+                if len(representative_doc) > 200:
+                    representative_doc = representative_doc[:200] + "..."
+                if topic_id in all_topics and all_topics[topic_id]:
+                    top5 = all_topics[topic_id][:5]
+                    coherence_score = float(sum(prob for _, prob in top5) / max(1, len(top5)))
+                else:
+                    coherence_score = 0.0
+
             topic_details_data.append(
                 {
                     "Topic_ID": str(topic_id),
