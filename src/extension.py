@@ -324,7 +324,7 @@ class BERTopicNode:
         else:
             LOGGER.info("Using TF-IDF vectorization")
 
-        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=2, max_df=1.0)
+        vectorizer_model = CountVectorizer(ngram_range=(1, 2), max_features=5000, min_df=5, max_df=1.0)
         LOGGER.info("CountVectorizer configured for c-TF-IDF topic representation (step 4)")
 
         # === DIMENSIONALITY REDUCTION ===
