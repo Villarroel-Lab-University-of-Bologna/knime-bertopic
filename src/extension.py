@@ -416,10 +416,8 @@ class BERTopicNode:
         np.random.seed(42)
         random.seed(42)
 
-        # Force probabilities calculation if requested and strategy is "Distributions"
-        calc_probs = self.calculate_probabilities
-        if self.reduce_outliers_method == "Distributions":
-            calc_probs = True
+        # Determine whether to generate probabilities based on the selected clustering method
+        calc_probs = True if self.clustering_method == "HDBSCAN" else self.calculate_probabilities
 
         try:
             if calc_probs:
@@ -436,28 +434,17 @@ class BERTopicNode:
             else:
                 raise e
 
-        # Track initial topics before outlier reduction for statistics
-        initial_topics = list(topics)
-
-        # === APPLY OUTLIER REDUCTION ===
-        if self.reduce_outliers_method != "None" and -1 in topics:
-            LOGGER.info(f"Applying outlier reduction using strategy: {self.reduce_outliers_method}")
-
-            if self.reduce_outliers_method == "c-TF-IDF":
-                # Strategy 1: Using c-TF-IDF representations
-                new_topics = topic_model.reduce_outliers(documents, topics, strategy="c-tf-idf")
-                topics = new_topics
-
-            elif self.reduce_outliers_method == "Distributions" and probabilities is not None:
-                # Strategy 2: Using calculation distributions (requires soft clustering probabilities)
-                new_topics = topic_model.reduce_outliers(
-                    documents, topics, strategy="probabilities", probabilities=probabilities, threshold=self.outlier_threshold
-                )
-                topics = new_topics
+        # 1. Track initial outliers, then reduce them automatically using the chosen strategy
+        initial_outliers = sum(1 for t in topics if t == -1)
+        if -1 in topics:
+            if probabilities is not None:
+                LOGGER.info(f"Automatically reducing {initial_outliers} outliers via probabilities strategy...")
+                topics = topic_model.reduce_outliers(documents, topics, strategy="probabilities", probabilities=probabilities)
             else:
-                LOGGER.warning("Outlier reduction skipped: Selected strategy requires calculated probabilities.")
+                LOGGER.info(f"Probabilities unavailable. Reducing {initial_outliers} outliers via distributions strategy...")
+                topics = topic_model.reduce_outliers(documents, topics, strategy="distributions")
 
-            # Update the model's internal topic assignments so output calculations align
+            # Synchronize the underlying model with the newly updated assignments
             topic_model.update_topics(documents, topics=topics)
 
         # Output 1: Documents + topics
@@ -500,7 +487,6 @@ class BERTopicNode:
         LOGGER.info(f"Topic modeling completed. Found {n_topics} core topics.")
 
         if probabilities is not None:
-            # Add a column for each topic's probability
             for topic_id in range(n_topics):
                 col_name = f"Topic {topic_id}"
                 output_df[col_name] = 0.0
@@ -516,9 +502,7 @@ class BERTopicNode:
                 col_name = f"Topic {topic_id}"
                 output_df[col_name] = output_df[col_name].astype("float64", copy=False)
 
-        # Enforce exact dtypes for main columns
         output_df["Assigned topic"] = output_df["Assigned topic"].astype("object", copy=False)
-        # Create the output table with the correct, dynamically-generated schema
         output1 = knext.Table.from_pandas(output_df)
 
         # Output 2: Topic-word probabilities
@@ -553,24 +537,19 @@ class BERTopicNode:
 
         output2 = knext.Table.from_pandas(topic_words_df)
 
-        # Output 3: Topic information
+        # === Output 3: Topic information ===
         topic_details_data = []
         n_docs = len(documents)
-        all_topics = topic_model.get_topics()
 
-        # Gather all unique topic IDs present in the final model, ensuring -1 is checked
         unique_topic_ids = list(all_topics.keys())
-        if -1 not in unique_topic_ids and -1 in initial_topics:
+        if -1 not in unique_topic_ids:
             unique_topic_ids = [-1] + unique_topic_ids
 
         for topic_id in unique_topic_ids:
-            # Post-reduction size and percentage
             topic_size = sum(1 for t in topics if t == topic_id)
             topic_percentage = (topic_size / n_docs) * 100.0 if n_docs > 0 else 0.0
 
-            # Contextual sizing for outliers
             if topic_id == -1:
-                initial_outliers = sum(1 for t in initial_topics if t == -1)
                 top_words_str = f"[OUTLIERS] - Initial: {initial_outliers} | Remaining: {topic_size}"
                 representative_doc = "N/A"
                 coherence_score = 0.0
@@ -598,6 +577,7 @@ class BERTopicNode:
                     "Coherence_Score": float(coherence_score),
                 }
             )
+
         if topic_details_data:
             topic_details_df = pd.DataFrame(topic_details_data).astype(
                 {
