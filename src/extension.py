@@ -205,18 +205,6 @@ class BERTopicNode:
     ).rule(knext.OneOf(clustering_method, ["KMeans"]), knext.Effect.HIDE)
 
     # === TOPIC REPRESENTATION ===
-
-    nr_topics = knext.StringParameter(
-        label="Number of topics",
-        description=(
-            "Target number of topics after merging.\n\n"
-            "• 'auto': BERTopic determina automaticamente il numero ottimale.\n\n"
-            "• Numero intero (es. 15): forza la riduzione/merging ai topic specificati. "
-            "Utile quando HDBSCAN produce un topic dominante."
-        ),
-        default_value="auto",
-    )
-
     use_mmr = knext.BoolParameter(
         label="Use Maximal Marginal Relevance (MMR)",
         description="Enable MMR for topic representation to balance relevance and diversity of topic terms.",
@@ -423,18 +411,7 @@ class BERTopicNode:
 
         # FIT BERTopic
         LOGGER.info("Fitting BERTopic model...")
-        nr_topics_value = None
-        if self.nr_topics.strip().lower() == "auto":
-            nr_topics_value = "auto"
-        else:
-            try:
-                nr_topics_value = int(self.nr_topics.strip())
-                if nr_topics_value < 2:
-                    raise knext.InvalidParametersError("Il numero di topic deve essere almeno 2.")
-            except ValueError:
-                raise knext.InvalidParametersError("'Number of topics' deve essere 'auto' o un intero positivo.")
-
-        topic_model = BERTopic(**bertopic_params, nr_topics=nr_topics_value)
+        topic_model = BERTopic(**bertopic_params, nr_topics="auto")
 
         np.random.seed(42)
         random.seed(42)
