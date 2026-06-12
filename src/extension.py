@@ -582,7 +582,6 @@ class BERTopicNode:
                 representative_docs_list = topic_model.get_representative_docs(topic_id)
                 representative_doc = representative_docs_list[0] if representative_docs_list else ""
 
-
                 if len(representative_doc) > 200:
                     representative_doc = representative_doc[:200] + "..."
                 if topic_id in all_topics and all_topics[topic_id]:
