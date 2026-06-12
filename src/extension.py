@@ -579,8 +579,9 @@ class BERTopicNode:
             else:
                 top_words_list = [w for (w, _) in all_topics[topic_id][: self.top_k_words]]
                 top_words_str = ", ".join(top_words_list)
-                topic_docs_idx = [i for i, t in enumerate(topics) if t == topic_id]
-                representative_doc = documents[topic_docs_idx[0]] if topic_docs_idx else ""
+                representative_docs_list = topic_model.get_representative_docs(topic_id)
+                representative_doc = representative_docs_list[0] if representative_docs_list else ""
+
 
                 if len(representative_doc) > 200:
                     representative_doc = representative_doc[:200] + "..."
