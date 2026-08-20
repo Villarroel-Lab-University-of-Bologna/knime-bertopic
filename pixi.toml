@@ -7,32 +7,32 @@ test = { cmd = "pytest" }
 format = { cmd = "ruff format ." }
 
 [dependencies]
-python = "3.11.*"
+python = "*"
 pytest = "*"
 ruff = "*"
-knime-extension = "5.*"
-knime-python-base = "5.*"
-knime-python-versions = "5.*"
+knime-extension = "*"
+knime-python-base = "*"
+knime-python-versions = "5.12.*"
 pixi-pycharm = ">=0.0.8,<0.0.9"
 bertopic = "==0.17.4"
 sentence-transformers = "==5.3.0"
-scikit-learn = "==1.7.2"
-hdbscan = "==0.8.41"
+scikit-learn = ">=1.7.1"
+hdbscan = ">=0.8.29"
 umap-learn = "==0.5.11"
 datasets = ">=4.1.0"
-pytorch = "==2.8.0"
-numpy = "==1.26.4"
+pytorch = ">=2.8.0"
+numpy = ">=1.26.4"
 python-flair = "*"
 
 [feature.build.dependencies]
-python = "3.11.*"
-knime-extension-bundling = "5.*"
+python = "*"
+knime-extension-bundling = "5.12.*"
 
 [feature.debug.dependencies]
 debugpy = "*"
 
 [feature.build.tasks]
-build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "build-python-extension . {{ dest }} --update-sites-version latest"}
+build = { args = [{ "arg" = "dest", "default" = "./local-update-site" }], cmd = "build-python-extension . {{ dest }} --update-sites-version 5.12"}
 register_debug_in_knime = { description = "Register the current KNIME extension with a KNIME installation. Usage: 'pixi run register-debug-in-knime' (default locations) or 'pixi run register-debug-in-knime C:/' (search entire C: drive if no executables found). Note windows paths should not end with \\ (backslash)", args = [
                 { "arg" = "search_path", "default" = "" }], cmd = "register-debug-in-knime{% if search_path %} --search-path \"{{ search_path }}\"{% endif %}" }
 
