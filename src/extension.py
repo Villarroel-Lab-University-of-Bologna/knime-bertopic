@@ -32,6 +32,7 @@ node_category = knext.category(
     icon="icons/icon.png",
 )
 
+
 @knext.node(
     name="Topic Extractor (BERTopic)",
     node_type=knext.NodeType.LEARNER,
